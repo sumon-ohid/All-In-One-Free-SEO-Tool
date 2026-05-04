@@ -683,7 +683,11 @@ export default async function ClientDetailPage({
         </div>
       </section>
 
-      <ShareCard clientId={client.id} shareToken={client.shareToken} />
+      <ShareCard
+        clientId={client.id}
+        shareToken={client.shareToken}
+        clientEmail={client.email}
+      />
 
       {/* DANGER ZONE */}
       <section className="relative overflow-hidden rounded-2xl border border-rose-500/20 bg-rose-500/5 backdrop-blur-md">

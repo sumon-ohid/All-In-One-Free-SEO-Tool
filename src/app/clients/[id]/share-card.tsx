@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Link2, Copy, Check, RefreshCw, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Link2,
+  Loader2,
+  Mail,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  emailPortalLink,
   generateShareToken,
   revokeShareToken,
 } from "../share-actions";
@@ -11,12 +21,19 @@ import {
 export function ShareCard({
   clientId,
   shareToken,
+  clientEmail,
 }: {
   clientId: number;
   shareToken: string | null;
+  clientEmail?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [emailing, startEmailing] = useTransition();
+  const [emailTo, setEmailTo] = useState(clientEmail ?? "");
+  const [emailStatus, setEmailStatus] = useState<
+    { kind: "idle" } | { kind: "sent" } | { kind: "error"; msg: string }
+  >({ kind: "idle" });
 
   const url =
     typeof window !== "undefined" && shareToken
@@ -120,6 +137,75 @@ export function ShareCard({
               <span className="text-muted-foreground">
                 Regenerating invalidates the old link immediately.
               </span>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <Mail className="size-3.5 text-fuchsia-300" />
+                Email it directly to your client
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="client@example.com"
+                  disabled={emailing}
+                  className="flex h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={emailing || !emailTo.trim()}
+                  onClick={() => {
+                    setEmailStatus({ kind: "idle" });
+                    const baseUrl =
+                      typeof window !== "undefined"
+                        ? window.location.origin
+                        : "";
+                    startEmailing(async () => {
+                      const r = await emailPortalLink({
+                        clientId,
+                        recipientEmail: emailTo.trim(),
+                        baseUrl,
+                      });
+                      if (r.ok) {
+                        setEmailStatus({ kind: "sent" });
+                        setTimeout(
+                          () => setEmailStatus({ kind: "idle" }),
+                          3500,
+                        );
+                      } else {
+                        setEmailStatus({ kind: "error", msg: r.error });
+                      }
+                    });
+                  }}
+                >
+                  {emailing ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin" />
+                      Sending…
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="size-3" />
+                      Send
+                    </>
+                  )}
+                </Button>
+              </div>
+              {emailStatus.kind === "sent" && (
+                <div className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                  <Check className="size-3" />
+                  Sent.
+                </div>
+              )}
+              {emailStatus.kind === "error" && (
+                <div className="inline-flex items-center gap-1 text-[11px] text-rose-300">
+                  <AlertCircle className="size-3" />
+                  {emailStatus.msg}
+                </div>
+              )}
             </div>
           </div>
         )}
