@@ -17,6 +17,7 @@ import {
 } from "@/app/outreach/actions";
 import { getSmtpConfig } from "@/lib/mailer";
 import { ClientInfoCard } from "@/components/client-info-card";
+import { GmailScopeBanner } from "@/components/gmail-scope-banner";
 
 const statusTone: Record<string, string> = {
   prospect: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
@@ -105,6 +106,8 @@ export default async function PerClientOutreachPage({
           .
         </div>
       )}
+
+      <GmailScopeBanner />
 
       <ClientInfoCard
         info={{

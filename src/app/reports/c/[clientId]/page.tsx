@@ -25,14 +25,21 @@ import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { getSmtpConfig } from "@/lib/mailer";
 import { SummaryPreview } from "./summary-preview";
 
-type Template = "executive" | "detailed" | "technical";
+type Template =
+  | "executive"
+  | "detailed"
+  | "technical"
+  | "ceo"
+  | "cmo"
+  | "cto"
+  | "junior";
 
 const TEMPLATES: {
   id: Template;
   name: string;
   description: string;
   bullets: string[];
-  accent: "violet" | "cyan" | "amber";
+  accent: "violet" | "cyan" | "amber" | "emerald" | "rose";
 }[] = [
   {
     id: "executive",
@@ -70,6 +77,62 @@ const TEMPLATES: {
       "Use for pre / post-deploy verification",
     ],
     accent: "amber",
+  },
+];
+
+const STAKEHOLDER_VARIANTS: {
+  id: Template;
+  name: string;
+  description: string;
+  bullets: string[];
+  accent: "violet" | "cyan" | "amber" | "emerald" | "rose";
+}[] = [
+  {
+    id: "ceo",
+    name: "CEO — revenue + ROI",
+    description: "Lean, traffic-value focused. For leadership.",
+    bullets: [
+      "Lead with traffic + conversions",
+      "Score + delta",
+      "Work completed",
+      "Skips technical noise",
+    ],
+    accent: "emerald",
+  },
+  {
+    id: "cmo",
+    name: "CMO — traffic + pipeline",
+    description: "Marketing leadership: what's converting + content priorities.",
+    bullets: [
+      "Traffic + GA4",
+      "Top keywords + CTR",
+      "Tasks completed",
+      "Recommendations",
+    ],
+    accent: "violet",
+  },
+  {
+    id: "cto",
+    name: "CTO — technical health",
+    description: "Engineering view. Issues, fixes, what shipped.",
+    bullets: [
+      "Audit issues by severity",
+      "Health score",
+      "Tasks completed",
+      "Skips marketing-speak",
+    ],
+    accent: "amber",
+  },
+  {
+    id: "junior",
+    name: "Junior marketer / standup",
+    description: "Work log + accomplishments — for hand-off or weekly check-ins.",
+    bullets: [
+      "Tasks completed list",
+      "Score snapshot",
+      "Compact and skim-friendly",
+    ],
+    accent: "rose",
   },
 ];
 
@@ -189,6 +252,27 @@ export default async function PerClientReportsPage({
             ready={Boolean(latest)}
           />
         ))}
+      </section>
+
+      {/* Stakeholder variants — same data, framed for a specific reader */}
+      <section className="space-y-3">
+        <header>
+          <h2 className="text-base font-semibold">Stakeholder variants</h2>
+          <p className="text-xs text-muted-foreground">
+            Same numbers, different framing. Use these when one report has
+            to go to multiple audiences.
+          </p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {STAKEHOLDER_VARIANTS.map((t) => (
+            <TemplateCard
+              key={t.id}
+              template={t}
+              clientId={client.id}
+              ready={Boolean(latest)}
+            />
+          ))}
+        </div>
       </section>
 
       {/* Quarterly strategy doc — strategic, not operational */}
@@ -320,15 +404,19 @@ function TemplateCard({
   clientId,
   ready,
 }: {
-  template: (typeof TEMPLATES)[number];
+  template: (typeof TEMPLATES)[number] | (typeof STAKEHOLDER_VARIANTS)[number];
   clientId: number;
   ready: boolean;
 }) {
-  const accentText = {
-    violet: "text-gradient-violet",
-    cyan: "text-gradient-cyan",
-    amber: "text-gradient-amber",
-  }[template.accent];
+  const accentText = (
+    {
+      violet: "text-gradient-violet",
+      cyan: "text-gradient-cyan",
+      amber: "text-gradient-amber",
+      emerald: "text-emerald-300",
+      rose: "text-rose-300",
+    } as const
+  )[template.accent];
 
   return (
     <div className="glass-apple lift-on-hover relative overflow-hidden rounded-2xl p-5">

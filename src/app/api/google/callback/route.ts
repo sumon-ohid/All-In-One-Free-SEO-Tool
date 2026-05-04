@@ -130,6 +130,15 @@ export async function GET(req: NextRequest) {
   ]);
   if (email) await setSetting("google.connected_email", email);
 
+  // Refresh the gmail-scope cache so the outreach banner disappears
+  // immediately if the user just granted the gmail.readonly scope.
+  try {
+    const { refreshGmailScopeCache } = await import("@/lib/gmail-scope");
+    await refreshGmailScopeCache();
+  } catch {
+    // ignore — banner will refresh on its own 12h cache cycle
+  }
+
   await logActivity({
     kind: "google.connected",
     message: `Connected Google account${email ? ` (${email})` : ""} for GSC + GA4 access.`,

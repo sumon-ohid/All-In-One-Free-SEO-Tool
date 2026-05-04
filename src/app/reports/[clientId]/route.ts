@@ -9,7 +9,15 @@ import { clients } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED: ReportTemplate[] = ["executive", "detailed", "technical"];
+const ALLOWED: ReportTemplate[] = [
+  "executive",
+  "detailed",
+  "technical",
+  "ceo",
+  "cmo",
+  "cto",
+  "junior",
+];
 
 function safeFilename(name: string): string {
   return name.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "client";

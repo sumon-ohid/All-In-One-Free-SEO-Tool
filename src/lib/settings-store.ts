@@ -54,6 +54,8 @@ export type SettingKey =
   | "outreach_reply_poll.last_run"
   | "anomaly_runner.last_run"
   | "title_test_runner.last_run"
+  | "google.gmail_scope_ok"
+  | "google.gmail_scope_checked_at"
   | "api.pagespeed"
   // Credit-saver mode: cap maxTokens, force terse system prompt, lower temp.
   // ON keeps token use under ~500/answer for cheap providers like Gemini /

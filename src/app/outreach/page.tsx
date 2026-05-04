@@ -9,6 +9,7 @@ import {
   ClientToolGrid,
   type ClientToolCard,
 } from "@/components/shell/client-tool-grid";
+import { GmailScopeBanner } from "@/components/gmail-scope-banner";
 
 export default async function OutreachIndexPage() {
   const all = await db.select().from(clients).orderBy(desc(clients.createdAt));
@@ -50,6 +51,7 @@ export default async function OutreachIndexPage() {
         icon={Send}
         accent="violet"
       />
+      <GmailScopeBanner />
       <ClientToolGrid cards={cards} basePath="/outreach/c" />
     </div>
   );

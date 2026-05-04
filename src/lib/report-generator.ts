@@ -189,6 +189,22 @@ export type ReportTemplate =
   | "cto"
   | "junior";
 
+/**
+ * Map the four stakeholder variants onto the three legacy templates so
+ * the section-gating logic doesn't have to grow seven branches at every
+ * decision point. CTO behaves like technical, CEO/junior like executive
+ * (lean), CMO like detailed (full report).
+ */
+function isTechnical(t: ReportTemplate): boolean {
+  return t === "technical" || t === "cto";
+}
+function isExecutive(t: ReportTemplate): boolean {
+  return t === "executive" || t === "ceo" || t === "junior";
+}
+function isDetailed(t: ReportTemplate): boolean {
+  return t === "detailed" || t === "cmo";
+}
+
 export const TEMPLATE_LABELS: Record<ReportTemplate, string> = {
   executive: "Executive",
   detailed: "Detailed",
@@ -575,11 +591,20 @@ export async function generateReportPdf(
       .text(`Prepared by ${brand.name}`);
   }
 
-  // Template label on cover
+  // Template label + variant intro on cover
   doc
     .fillColor(palette.mute)
     .fontSize(9)
     .text(`Template · ${TEMPLATE_LABELS[template]}`);
+  const framing = TEMPLATE_FRAMING[template];
+  if (framing?.intro) {
+    doc
+      .moveDown(0.3)
+      .fillColor(palette.mute)
+      .font("Helvetica-Oblique")
+      .fontSize(10)
+      .text(framing.intro);
+  }
 
   doc.moveDown(2);
 
@@ -600,7 +625,7 @@ export async function generateReportPdf(
 
   // === Performance over time (snapshot delta) ===
   if (
-    template !== "technical" &&
+    !isTechnical(template) &&
     snapshotComparison.latest &&
     (snapshotComparison.baseline || snapshotComparison.prior)
   ) {
@@ -661,7 +686,7 @@ export async function generateReportPdf(
   }
 
   // === Performance highlights === (skip on technical)
-  if (template !== "technical") {
+  if (!isTechnical(template)) {
     drawSectionHeading(doc, "Performance highlights");
     drawKeyValueRow(doc, "Audits completed this period", String(completedAudits.length));
     drawKeyValueRow(doc, "Tasks completed", `${doneTasks.length} of ${allTasks.length}`);
@@ -688,7 +713,7 @@ export async function generateReportPdf(
   }
 
   // === Organic traffic detail === (detailed only, when GA4 data exists)
-  if (template === "detailed" && ga4Daily.length > 0) {
+  if (isDetailed(template) && ga4Daily.length > 0) {
     drawSectionHeading(doc, "Organic traffic — last 28 days");
     drawKeyValueRow(doc, "Sessions", totalSessions.toLocaleString());
     drawKeyValueRow(
@@ -714,11 +739,11 @@ export async function generateReportPdf(
   }
 
   // === Top keywords from Search Console ===
-  if (gscTop.length > 0 && template !== "executive") {
+  if (gscTop.length > 0 && !isExecutive(template)) {
     drawSectionHeading(doc, "Top keywords (Search Console, 28 days)");
     drawKeywordTable(doc, gscTop.slice(0, 10));
     doc.moveDown(1.2);
-  } else if (gscTop.length > 0 && template === "executive") {
+  } else if (gscTop.length > 0 && isExecutive(template)) {
     // Executive: just the top 5 as a tight list
     drawSectionHeading(doc, "Top organic keywords");
     for (const k of gscTop.slice(0, 5)) {
@@ -739,7 +764,7 @@ export async function generateReportPdf(
   }
 
   // === Quick wins ===
-  if (gscQuickWins.length > 0 && template !== "executive") {
+  if (gscQuickWins.length > 0 && !isExecutive(template)) {
     drawSectionHeading(doc, "Quick wins — keywords ranking 4-15");
     doc
       .fillColor(palette.mute)
@@ -768,11 +793,11 @@ export async function generateReportPdf(
 
     // Executive: cap each severity to a small number, drop low altogether
     const severitiesToShow: (keyof typeof grouped)[] =
-      template === "executive"
+      isExecutive(template)
         ? ["critical", "high"]
         : ["critical", "high", "medium", "low"];
     const perSevCap =
-      template === "executive" ? 3 : template === "detailed" ? 25 : Infinity;
+      isExecutive(template) ? 3 : isDetailed(template) ? 25 : Infinity;
 
     for (const sev of severitiesToShow) {
       const list = grouped[sev];
@@ -797,7 +822,7 @@ export async function generateReportPdf(
           .fontSize(9)
           .text(issue.message, { lineGap: 2 });
         // Technical template: include the URL too
-        if (template === "technical") {
+        if (isTechnical(template)) {
           doc
             .font("Helvetica-Oblique")
             .fillColor(palette.mute)
@@ -819,14 +844,14 @@ export async function generateReportPdf(
   }
 
   // Executive template stops here — short and focused
-  if (template === "executive") {
+  if (isExecutive(template)) {
     drawFooter(doc, brand, today);
     doc.end();
     return finished;
   }
 
   // === Work completed this month === (detailed only)
-  if (template === "detailed") {
+  if (isDetailed(template)) {
     doc.addPage();
     drawSectionHeading(doc, "Work completed this period");
     if (doneTasks.length === 0) {
@@ -1044,7 +1069,7 @@ export async function generateReportPdf(
   }
 
   // Technical template: tech-stack focus + security headers info
-  if (template === "technical") {
+  if (isTechnical(template)) {
     doc.moveDown(1);
     drawSectionHeading(doc, "Tech stack");
     doc
