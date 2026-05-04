@@ -12,10 +12,12 @@ import {
 import { RefreshFeedsButton } from "./refresh-button";
 import { AddFeedForm, FeedRow } from "./add-feed-form";
 import { CleanupBar, DeleteItemButton } from "./cleanup-bar";
+import { markSectionSeen } from "@/lib/unread-counts";
 
 export default async function NewsPage() {
   // Seed defaults on first visit so user has something to read immediately
   await seedDefaultFeedsIfEmpty();
+  await markSectionSeen("news").catch(() => {});
 
   const [feeds, items] = await Promise.all([
     db.select().from(newsFeeds).orderBy(desc(newsFeeds.createdAt)),

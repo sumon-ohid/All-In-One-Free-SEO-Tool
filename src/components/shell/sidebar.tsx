@@ -129,9 +129,14 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export function Sidebar() {
+export function Sidebar({
+  unreadByHref,
+}: {
+  unreadByHref?: Record<string, number>;
+} = {}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const unread = unreadByHref ?? {};
 
   // Hydrate from localStorage on mount — defer the setState to avoid cascading
   // renders flagged by react-hooks/set-state-in-effect.
@@ -279,8 +284,20 @@ export function Sidebar() {
                         }`}
                       />
                       {!collapsed && (
-                        <span className="relative">{label}</span>
+                        <span className="relative flex-1">{label}</span>
                       )}
+                      {unread[href] && unread[href] > 0 ? (
+                        collapsed ? (
+                          <span
+                            aria-label={`${unread[href]} new`}
+                            className="absolute right-1 top-1 size-2 rounded-full bg-rose-500 ring-2 ring-background"
+                          />
+                        ) : (
+                          <span className="relative ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500/20 px-1.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/40">
+                            {unread[href] > 9 ? "9+" : unread[href]}
+                          </span>
+                        )
+                      ) : null}
                     </Link>
                   </li>
                 );

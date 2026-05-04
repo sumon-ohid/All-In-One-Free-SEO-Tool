@@ -297,6 +297,26 @@ export default async function ClientDetailPage({
                 AI blog
               </Link>
               <Link
+                href={`/clients/${client.id}/onboarding`}
+                className={buttonVariants({
+                  variant: "outline",
+                  className:
+                    client.onboardingStep === "completed"
+                      ? "border-white/10 bg-white/5"
+                      : "border-violet-500/40 bg-violet-500/10 text-violet-200",
+                })}
+                title={
+                  client.onboardingStep === "completed"
+                    ? "Re-run onboarding to refresh keywords + plan"
+                    : "Smart onboarding — auto-generates a 30-day plan"
+                }
+              >
+                <Sparkles className="size-3.5" />
+                {client.onboardingStep === "completed"
+                  ? "Re-plan"
+                  : "Smart onboarding"}
+              </Link>
+              <Link
                 href={`/clients/${client.id}/edit`}
                 className={buttonVariants({
                   variant: "outline",

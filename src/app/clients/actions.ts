@@ -165,7 +165,10 @@ export async function createClient(
 
   revalidatePath("/");
   revalidatePath("/clients");
-  redirect(`/clients/${row.id}`);
+  // First-add: drop into the smart-onboarding wizard so they get a 30-day
+  // plan generated end-to-end. Existing clients still go straight to the
+  // detail page (their wizard is reachable via the "Re-plan" button).
+  redirect(`/clients/${row.id}/onboarding`);
 }
 
 async function applyStackTemplatesInternal(

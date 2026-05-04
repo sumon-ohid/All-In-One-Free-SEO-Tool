@@ -13,6 +13,7 @@ import {
   Send,
   Eye,
   XCircle,
+  Compass,
 } from "lucide-react";
 import { db } from "@/db/client";
 import {
@@ -179,6 +180,13 @@ export default async function LinkBuildingPage({
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
               {trackedRows.length} tracked
             </span>
+            <Link
+              href="/link-building/prospects"
+              className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-2.5 py-1 text-violet-300 ring-1 ring-inset ring-violet-500/30 hover:bg-violet-500/20"
+            >
+              <Compass className="size-3" />
+              Find new prospects
+            </Link>
           </div>
         }
       />

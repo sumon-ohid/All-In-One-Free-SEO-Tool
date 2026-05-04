@@ -2,10 +2,14 @@
  * Generates a real LLM-backed executive summary when an API key is set.
  * Falls back to template-based output otherwise.
  *
- * No SDK dependency — direct fetch to keep the binary small.
+ * Uses the central `callAI` helper so it benefits from credit-saver mode
+ * + the feedback-driven style learning automatically.
  */
 
+import { callAI } from "./ai-call";
+
 export type ExecSummaryInput = {
+  clientId?: number;
   clientName: string;
   clientUrl: string;
   score: number | null;
@@ -38,200 +42,20 @@ export async function generateExecSummary(
   input: ExecSummaryInput,
 ): Promise<string> {
   const userPrompt = buildUserPrompt(input);
-  const { getActiveProvider, getApiKey, getOllamaUrl } = await import(
-    "./api-keys"
-  );
 
-  const active = await getActiveProvider();
-  if (!active) return templateSummary(input);
+  const result = await callAI({
+    system: SYSTEM_PROMPT,
+    user: userPrompt,
+    maxTokens: 500,
+    temperature: 0.4,
+    timeoutMs: 25_000,
+    feature: "exec_summary",
+    clientId: input.clientId ?? null,
+    ignoreCreditSaver: true,
+  });
 
-  try {
-    if (active === "gemini") {
-      const k = await getApiKey("gemini");
-      if (k) {
-        const r = await callGemini(k, userPrompt);
-        if (r) return r;
-      }
-    } else if (active === "groq") {
-      const k = await getApiKey("groq");
-      if (k) {
-        const r = await callGroq(k, userPrompt);
-        if (r) return r;
-      }
-    } else if (active === "anthropic") {
-      const k = await getApiKey("anthropic");
-      if (k) {
-        const r = await callAnthropic(k, userPrompt);
-        if (r) return r;
-      }
-    } else if (active === "openai") {
-      const k = await getApiKey("openai");
-      if (k) {
-        const r = await callOpenAI(k, userPrompt);
-        if (r) return r;
-      }
-    } else if (active === "openrouter") {
-      const k = await getApiKey("openrouter");
-      if (k) {
-        const r = await callOpenRouter(k, userPrompt);
-        if (r) return r;
-      }
-    } else if (active === "ollama") {
-      const url = await getOllamaUrl();
-      const r = await callOllama(url, userPrompt);
-      if (r) return r;
-    }
-  } catch {
-    /* fall through to template */
-  }
-
+  if (result && result.trim().length > 0) return result.trim();
   return templateSummary(input);
-}
-
-async function callGemini(
-  apiKey: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 20_000);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      signal: c.signal,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          { role: "user", parts: [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }] },
-        ],
-        generationConfig: { maxOutputTokens: 400, temperature: 0.4 },
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    return (
-      data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ||
-      null
-    );
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function callGroq(
-  apiKey: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 20_000);
-  try {
-    const res = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        signal: c.signal,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          max_tokens: 400,
-          temperature: 0.4,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    return data.choices?.[0]?.message?.content?.trim() ?? null;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function callOpenRouter(
-  apiKey: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 20_000);
-  try {
-    const res = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        signal: c.signal,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-          "x-title": "SEO Tool",
-        },
-        body: JSON.stringify({
-          model: "meta-llama/llama-3.3-70b-instruct:free",
-          max_tokens: 400,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    return data.choices?.[0]?.message?.content?.trim() ?? null;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function callOllama(
-  baseUrl: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const models = ["llama3.2", "llama3.1", "mistral", "phi3"];
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 60_000);
-  try {
-    for (const model of models) {
-      try {
-        const res = await fetch(`${baseUrl}/api/chat`, {
-          method: "POST",
-          signal: c.signal,
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            model,
-            stream: false,
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              { role: "user", content: userPrompt },
-            ],
-          }),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as {
-            message?: { content?: string };
-          };
-          const text = data.message?.content?.trim();
-          if (text) return text;
-        }
-      } catch {
-        /* try next */
-      }
-    }
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
 }
 
 function buildUserPrompt(input: ExecSummaryInput): string {
@@ -265,7 +89,6 @@ function buildUserPrompt(input: ExecSummaryInput): string {
     lines.push("Top issues: none significant.");
   }
 
-  // Real Google data when available — heavily weight this in the summary
   if (typeof input.organicSessions === "number") {
     const trend =
       typeof input.organicSessionsDeltaPct === "number"
@@ -292,82 +115,6 @@ function buildUserPrompt(input: ExecSummaryInput): string {
   lines.push("");
   lines.push("Write the executive summary now.");
   return lines.join("\n");
-}
-
-async function callAnthropic(
-  apiKey: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 20_000);
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal: c.signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 400,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      content?: { type: string; text?: string }[];
-    };
-    const text = data.content
-      ?.filter((c) => c.type === "text")
-      .map((c) => c.text ?? "")
-      .join("\n")
-      .trim();
-    return text && text.length > 0 ? text : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function callOpenAI(
-  apiKey: string,
-  userPrompt: string,
-): Promise<string | null> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), 20_000);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      signal: c.signal,
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 400,
-        temperature: 0.4,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content?.trim();
-    return text && text.length > 0 ? text : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
 }
 
 /**

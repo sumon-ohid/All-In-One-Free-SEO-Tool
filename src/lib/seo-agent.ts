@@ -101,6 +101,8 @@ export async function runSeoAgent(
     maxTokens: 3000,
     temperature: 0.5,
     timeoutMs: 60_000,
+    feature: "content_idea",
+    clientId,
   });
 
   if (!raw) {

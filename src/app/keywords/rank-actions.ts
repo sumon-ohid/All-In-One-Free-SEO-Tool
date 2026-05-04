@@ -46,6 +46,12 @@ export async function checkRankAction(
       clientId: keywords.clientId,
       clientName: clients.name,
       clientUrl: clients.url,
+      kwCountry: keywords.country,
+      kwCity: keywords.city,
+      kwLanguage: keywords.language,
+      clientCountry: clients.country,
+      clientCity: clients.city,
+      clientLanguage: clients.language,
     })
     .from(keywords)
     .leftJoin(clients, eq(keywords.clientId, clients.id))
@@ -55,6 +61,13 @@ export async function checkRankAction(
   if (!row || !row.clientUrl) {
     return { ok: false, error: "Keyword or client not found" };
   }
+
+  // Locale precedence: keyword-specific > client-level > default US/en.
+  const locale = {
+    country: row.kwCountry || row.clientCountry || "US",
+    city: row.kwCity ?? row.clientCity ?? undefined,
+    language: row.kwLanguage || row.clientLanguage || "en",
+  };
 
   // Most recent prior reading (for delta + alerts)
   const previous = await db
@@ -74,6 +87,7 @@ export async function checkRankAction(
 
   const result = await checkRank(row.query, row.clientUrl, {
     screenshot: wantScreenshot,
+    ...locale,
   });
 
   await db.insert(keywordRankings).values({
@@ -92,7 +106,10 @@ export async function checkRankAction(
   let buffer = result.screenshotBuffer;
   if (!buffer && positionChangedBigly) {
     // Re-run with screenshot just to capture this state — rare path
-    const r2 = await checkRank(row.query, row.clientUrl, { screenshot: true });
+    const r2 = await checkRank(row.query, row.clientUrl, {
+      screenshot: true,
+      ...locale,
+    });
     buffer = r2.screenshotBuffer;
   }
 

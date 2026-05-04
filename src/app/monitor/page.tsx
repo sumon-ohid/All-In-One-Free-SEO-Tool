@@ -9,8 +9,10 @@ import {
   ClientToolGrid,
   type ClientToolCard,
 } from "@/components/shell/client-tool-grid";
+import { markSectionSeen } from "@/lib/unread-counts";
 
 export default async function MonitorIndexPage() {
+  await markSectionSeen("page_changes").catch(() => {});
   const all = await db.select().from(clients).orderBy(desc(clients.createdAt));
 
   const cards: ClientToolCard[] = await Promise.all(

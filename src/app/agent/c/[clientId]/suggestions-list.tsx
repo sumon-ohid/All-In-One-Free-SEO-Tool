@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AiFeedback } from "@/components/ai-feedback";
 import {
   applySuggestion,
   dismissSuggestion,
@@ -194,7 +195,7 @@ export function SuggestionsList({
       ) : (
         <ul className="space-y-3">
           {filtered.map((s) => (
-            <SuggestionCard key={s.id} s={s} />
+            <SuggestionCard key={s.id} s={s} clientId={clientId} />
           ))}
         </ul>
       )}
@@ -202,7 +203,13 @@ export function SuggestionsList({
   );
 }
 
-function SuggestionCard({ s }: { s: SuggestionRow }) {
+function SuggestionCard({
+  s,
+  clientId,
+}: {
+  s: SuggestionRow;
+  clientId: number;
+}) {
   const [pending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
 
@@ -281,6 +288,15 @@ function SuggestionCard({ s }: { s: SuggestionRow }) {
             <span>{s.rationale}</span>
           </p>
         )}
+
+        <div className="pt-1">
+          <AiFeedback
+            feature="content_idea"
+            aiOutput={s.suggestedValue}
+            clientId={clientId}
+            size="sm"
+          />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button

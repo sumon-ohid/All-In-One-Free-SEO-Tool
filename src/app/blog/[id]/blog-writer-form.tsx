@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateBlogPost, saveBlogDraft } from "./actions";
+import { AiFeedback } from "@/components/ai-feedback";
 
 type Suggestion = {
   source: "quick_win" | "niche";
@@ -315,6 +316,14 @@ export function BlogWriterForm({
                 Edit inline if needed. Save as a draft, copy markdown, or
                 download as a file.
               </p>
+              <div className="mt-2">
+                <AiFeedback
+                  feature="blog_draft"
+                  aiOutput={markdown}
+                  clientId={clientId}
+                  size="sm"
+                />
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button

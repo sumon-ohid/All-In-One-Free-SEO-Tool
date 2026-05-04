@@ -1,17 +1,22 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq, asc } from "drizzle-orm";
-import { Send, ExternalLink, X } from "lucide-react";
+import { Send, ExternalLink, X, FileText } from "lucide-react";
 import { db } from "@/db/client";
 import { clients, outreachContacts } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { AddOutreachForm } from "@/app/outreach/add-form";
+import { ComposeButton } from "@/app/outreach/compose-button";
 import {
   setContactStatus,
   deleteOutreachContact,
+  loadTemplatesForClient,
 } from "@/app/outreach/actions";
+import { getSmtpConfig } from "@/lib/mailer";
+import { ClientInfoCard } from "@/components/client-info-card";
 
 const statusTone: Record<string, string> = {
   prospect: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
@@ -50,6 +55,12 @@ export default async function PerClientOutreachPage({
     .where(eq(outreachContacts.clientId, clientId))
     .orderBy(desc(outreachContacts.updatedAt));
 
+  const [templates, smtp] = await Promise.all([
+    loadTemplatesForClient(clientId),
+    getSmtpConfig(),
+  ]);
+  const smtpConfigured = Boolean(smtp);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <ClientToolHeader
@@ -70,6 +81,44 @@ export default async function PerClientOutreachPage({
         description="Manage the outreach pipeline: prospects, contacted, replied, won, lost."
         icon={Send}
         accent="violet"
+        meta={
+          <Link
+            href="/outreach/templates"
+            className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-xs text-muted-foreground ring-1 ring-inset ring-white/10 hover:bg-white/10 hover:text-foreground"
+          >
+            <FileText className="size-3.5" />
+            Manage templates
+          </Link>
+        }
+      />
+
+      {!smtpConfigured && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+          SMTP isn&apos;t configured yet — you can add contacts now, but
+          sending email is disabled until you{" "}
+          <Link
+            href="/settings#smtp"
+            className="underline hover:text-amber-100"
+          >
+            connect SMTP in settings
+          </Link>
+          .
+        </div>
+      )}
+
+      <ClientInfoCard
+        info={{
+          name: client.name,
+          url: client.url,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          description: client.description,
+          city: client.city,
+          country: client.country,
+          businessType: client.businessType,
+          shortDescription: client.description?.split(".")[0] ?? null,
+        }}
       />
 
       <AddOutreachForm clients={[{ id: client.id, name: client.name }]} />
@@ -124,6 +173,23 @@ export default async function PerClientOutreachPage({
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
+                      {c.email && (
+                        <ComposeButton
+                          contact={{
+                            id: c.id,
+                            name: c.name,
+                            email: c.email,
+                            website: c.website,
+                          }}
+                          templates={templates.map((t) => ({
+                            id: t.id,
+                            name: t.name,
+                            subject: t.subject,
+                            body: t.body,
+                          }))}
+                          smtpConfigured={smtpConfigured}
+                        />
+                      )}
                       {STATUSES.filter((s) => s !== c.status).map((s) => {
                         const action = setContactStatus.bind(null, c.id, s);
                         return (

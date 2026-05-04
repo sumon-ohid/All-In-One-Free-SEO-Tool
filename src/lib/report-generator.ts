@@ -1,7 +1,13 @@
 import PDFDocument from "pdfkit";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { db } from "@/db/client";
-import { audits, auditIssues, clients, tasks } from "@/db/schema";
+import {
+  audits,
+  auditIssues,
+  backlinks,
+  clients,
+  tasks,
+} from "@/db/schema";
 import { getSetting } from "./settings-store";
 import { generateExecSummary } from "./ai-summary";
 import {
@@ -279,6 +285,32 @@ export async function generateReportPdf(
   const doneTasks = allTasks.filter((t) => t.status === "done");
   const openTasks = allTasks.filter((t) => t.status !== "done");
 
+  // Manually-logged backlinks built in the last 30 days — these flow
+  // straight from the user's link log into "Links built this period."
+  const periodCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const linksBuiltThisPeriod = await db
+    .select({
+      id: backlinks.id,
+      sourceUrl: backlinks.sourceUrl,
+      sourceDomain: backlinks.sourceDomain,
+      targetUrl: backlinks.targetUrl,
+      anchorText: backlinks.anchorText,
+      domainAuthority: backlinks.domainAuthority,
+      method: backlinks.method,
+      rel: backlinks.rel,
+      placedAt: backlinks.placedAt,
+      notes: backlinks.notes,
+    })
+    .from(backlinks)
+    .where(
+      and(
+        eq(backlinks.clientId, clientId),
+        eq(backlinks.source, "manual"),
+        gte(backlinks.placedAt, periodCutoff),
+      ),
+    )
+    .orderBy(desc(backlinks.placedAt));
+
   const topIssue =
     allIssues.find((i) => i.severity === "critical")?.message ??
     allIssues.find((i) => i.severity === "high")?.message ??
@@ -336,6 +368,7 @@ export async function generateReportPdf(
       : null;
 
   const exec = await generateExecSummary({
+    clientId: client.id,
     clientName: client.name,
     clientUrl: client.url,
     score: latest?.score ?? null,
@@ -648,6 +681,66 @@ export async function generateReportPdf(
     }
 
     doc.moveDown(1.5);
+
+    // === Links built this period ===
+    if (linksBuiltThisPeriod.length > 0) {
+      drawSectionHeading(doc, "Links built this period");
+      doc.fillColor(palette.ink).font("Helvetica").fontSize(10);
+      const total = linksBuiltThisPeriod.length;
+      const dofollow = linksBuiltThisPeriod.filter((l) => l.rel === "dofollow")
+        .length;
+      const avgDa = (() => {
+        const withDa = linksBuiltThisPeriod
+          .map((l) => l.domainAuthority)
+          .filter((d): d is number => typeof d === "number");
+        if (withDa.length === 0) return null;
+        return Math.round(
+          withDa.reduce((s, n) => s + n, 0) / withDa.length,
+        );
+      })();
+      doc
+        .font("Helvetica-Bold")
+        .text(`${total} link${total === 1 ? "" : "s"} placed`);
+      doc
+        .font("Helvetica")
+        .fillColor(palette.mute)
+        .fontSize(9)
+        .text(
+          `${dofollow} dofollow${avgDa !== null ? ` · avg DA ${avgDa}` : ""}`,
+        );
+      doc.moveDown(0.6);
+      doc.fontSize(10).fillColor(palette.ink);
+      for (const l of linksBuiltThisPeriod) {
+        ensureSpace(doc, 28);
+        doc
+          .font("Helvetica-Bold")
+          .text(`• ${l.sourceDomain}${l.method ? ` (${l.method})` : ""}`);
+        const meta: string[] = [];
+        if (l.anchorText) meta.push(`anchor: "${l.anchorText}"`);
+        if (l.domainAuthority !== null && l.domainAuthority !== undefined)
+          meta.push(`DA ${l.domainAuthority}`);
+        if (l.rel) meta.push(l.rel);
+        if (l.placedAt)
+          meta.push(new Date(l.placedAt).toLocaleDateString());
+        if (meta.length > 0) {
+          doc
+            .font("Helvetica")
+            .fillColor(palette.mute)
+            .fontSize(9)
+            .text(meta.join(" · "));
+        }
+        if (l.notes) {
+          doc
+            .font("Helvetica-Oblique")
+            .fillColor(palette.mute)
+            .fontSize(9)
+            .text(l.notes);
+        }
+        doc.moveDown(0.3);
+        doc.fontSize(10).fillColor(palette.ink);
+      }
+      doc.moveDown(1);
+    }
 
     // === Recommendations / next month ===
     drawSectionHeading(doc, "Recommendations · next period");

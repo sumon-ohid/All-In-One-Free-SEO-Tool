@@ -82,6 +82,7 @@ async function checkOnGoogle(
   query: string,
   domain: string,
   withScreenshot = false,
+  locale?: { country?: string; language?: string; city?: string },
 ): Promise<RankCheckResult> {
   const browser = await getBrowser();
   const context = await newContext(browser);
@@ -90,7 +91,12 @@ async function checkOnGoogle(
   let resultsScanned = 0;
 
   try {
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en&num=100&pws=0`;
+    const country = (locale?.country ?? "US").toUpperCase();
+    const lang = locale?.language ?? "en";
+    // For city-level checks, prepend the city to the query — that's what
+    // produces a localised SERP without needing IP-spoofing infrastructure.
+    const finalQuery = locale?.city ? `${query} ${locale.city}` : query;
+    const url = `https://www.google.com/search?q=${encodeURIComponent(finalQuery)}&hl=${encodeURIComponent(lang)}&gl=${country}&num=100&pws=0`;
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     // small delay so client-side hydration has a chance to render
     await page.waitForTimeout(500);
@@ -265,7 +271,12 @@ async function checkOnDuckDuckGo(
 export async function checkRank(
   query: string,
   rawDomain: string,
-  options: { screenshot?: boolean } = {},
+  options: {
+    screenshot?: boolean;
+    country?: string;
+    language?: string;
+    city?: string;
+  } = {},
 ): Promise<RankCheckResult> {
   const domain = normalizeDomain(rawDomain);
   if (!domain) {
@@ -281,7 +292,17 @@ export async function checkRank(
     };
   }
 
-  const google = await checkOnGoogle(query, domain, options.screenshot ?? false);
+  const locale = {
+    country: options.country,
+    language: options.language,
+    city: options.city,
+  };
+  const google = await checkOnGoogle(
+    query,
+    domain,
+    options.screenshot ?? false,
+    locale,
+  );
   if (google.error || google.resultsScanned === 0) {
     const ddg = await checkOnDuckDuckGo(query, domain);
     // Prefer DDG result if Google was blocked, else return Google's null result

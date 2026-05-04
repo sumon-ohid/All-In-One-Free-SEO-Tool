@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Bell,
+  Brain,
   CheckCircle2,
   Database,
   Key,
@@ -311,6 +312,35 @@ export default async function SettingsPage() {
             configured={configuredKeys}
             ollamaUrl={ollamaUrl}
           />
+        </div>
+      </section>
+
+      {/* AI learning */}
+      <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">
+        <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-violet-500/15 blur-3xl" />
+        <header className="relative border-b border-white/5 px-5 py-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <Brain className="size-4 text-violet-300" />
+            AI learning
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Watches what you correct in AI output and turns it into
+            durable style rules. The longer you use the tool, the better
+            its first-pass output gets — no model training needed.
+          </p>
+        </header>
+        <div className="relative flex flex-wrap items-center justify-between gap-3 p-5">
+          <p className="text-sm text-muted-foreground">
+            Review learned rules, manually disable any that are wrong,
+            and trigger the distill step on demand.
+          </p>
+          <Link
+            href="/settings/ai-learning"
+            className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm transition-colors hover:bg-white/10"
+          >
+            Open AI learning
+            <ArrowRight className="size-3.5" />
+          </Link>
         </div>
       </section>
 

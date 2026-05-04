@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { askTheTool } from "./actions";
+import { AiFeedback } from "@/components/ai-feedback";
 
 type Turn =
   | { kind: "user"; text: string }
@@ -132,11 +133,19 @@ export function AskClient({
                   )}
                 </div>
                 <div
-                  className={`min-w-0 flex-1 whitespace-pre-wrap text-sm ${
+                  className={`min-w-0 flex-1 space-y-2 whitespace-pre-wrap text-sm ${
                     t.kind === "error" ? "text-rose-200/90" : ""
                   }`}
                 >
-                  {t.text}
+                  <div>{t.text}</div>
+                  {t.kind === "tool" && (
+                    <AiFeedback
+                      feature="general"
+                      aiOutput={t.text}
+                      clientId={clientId ? Number(clientId) : null}
+                      size="sm"
+                    />
+                  )}
                 </div>
               </div>
             ))}

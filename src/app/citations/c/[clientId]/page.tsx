@@ -21,6 +21,8 @@ import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { CATEGORY_LABELS } from "@/lib/seo-resources-loader";
 import { trackResource, deleteSubmission } from "@/app/link-building/actions";
 import { setStatusForm } from "@/app/citations/actions";
+import { citationsForCountry } from "@/lib/citations-data";
+import { ClientInfoCard } from "@/components/client-info-card";
 
 const CITATION_CATEGORIES = [
   "local-citation",
@@ -193,6 +195,76 @@ export default async function PerClientCitationsPage({
             />
           ))}
         </div>
+      </section>
+
+      {/* Quick-copy NAP card for filling submission forms */}
+      <ClientInfoCard
+        info={{
+          name: client.name,
+          url: client.url,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          description: client.description,
+          city: client.city,
+          country: client.country,
+          businessType: client.businessType,
+          shortDescription: client.description?.split(".")[0] ?? null,
+        }}
+      />
+
+      {/* Country-specific recommended directories */}
+      <section className="glass-apple relative overflow-hidden rounded-2xl">
+        <header className="border-b border-white/[0.06] px-5 py-4">
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <ExternalLink className="size-4 text-cyan-300" />
+            Recommended directories for{" "}
+            {client.country ?? "your country"}
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Country-specific listings ranked by typical SEO impact. The
+            high-importance ones (★★★★+) are usually worth getting first.
+          </p>
+        </header>
+        <ul className="divide-y divide-white/[0.04]">
+          {citationsForCountry(client.country ?? "US").slice(0, 18).map((c) => (
+            <li
+              key={c.url}
+              className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm"
+            >
+              <a
+                href={c.submitUrl ?? c.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium hover:underline"
+              >
+                {c.name}
+                <ExternalLink className="size-3 opacity-60" />
+              </a>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ring-1 ring-inset ${
+                  c.importance >= 5
+                    ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                    : c.importance >= 4
+                      ? "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30"
+                      : c.importance >= 3
+                        ? "bg-violet-500/15 text-violet-300 ring-violet-500/30"
+                        : "bg-white/5 text-muted-foreground ring-white/10"
+                }`}
+              >
+                {"★".repeat(c.importance)}
+              </span>
+              <span className="rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground ring-1 ring-inset ring-white/10">
+                {c.category.replace(/_/g, " ")}
+              </span>
+              {c.notes && (
+                <span className="basis-full pl-1 text-[11px] text-muted-foreground">
+                  {c.notes}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Tracked submissions */}

@@ -1,6 +1,15 @@
 import { getActiveProvider, getApiKey, getOllamaUrl } from "./api-keys";
 import { getSetting } from "./settings-store";
 
+export type AiFeatureName =
+  | "exec_summary"
+  | "blog_draft"
+  | "title_rewrite"
+  | "meta_rewrite"
+  | "review_reply"
+  | "content_idea"
+  | "general";
+
 export type AiCallOptions = {
   system: string;
   user: string;
@@ -13,6 +22,14 @@ export type AiCallOptions = {
    * useless (e.g. full blog drafts that need to be long by definition).
    */
   ignoreCreditSaver?: boolean;
+  /**
+   * Tags this call so the feedback-learning module can inject learned
+   * style rules into the system prompt. Optional but recommended for
+   * any user-facing feature that takes corrections.
+   */
+  feature?: AiFeatureName;
+  /** Scopes learned rules to this client when set. */
+  clientId?: number | null;
 };
 
 /**
@@ -43,6 +60,23 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
       system = `Credit-saver mode: keep your answer to 2-4 short sentences. Skip pleasantries, headers, and preamble. Lead with the most useful information first.\n\n${system}`;
       max = Math.min(max, 500);
       temperature = Math.min(temperature, 0.3);
+    }
+  }
+
+  // Inject learned style rules from the feedback-driven preference store.
+  // Silent on failure — never let the learning layer break the call.
+  if (opts.feature) {
+    try {
+      const { getStylePromptForFeature } = await import("./ai-learn");
+      const stylePrompt = await getStylePromptForFeature({
+        feature: opts.feature,
+        clientId: opts.clientId,
+      });
+      if (stylePrompt) {
+        system = `${system}\n\n${stylePrompt}`;
+      }
+    } catch {
+      // ignore
     }
   }
 

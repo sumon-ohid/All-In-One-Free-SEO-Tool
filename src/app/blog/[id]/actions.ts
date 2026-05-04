@@ -71,6 +71,7 @@ export async function generateBlogPost(opts: {
     : [];
 
   const result = await writeBlogPost({
+    clientId: client.id,
     clientName: client.name,
     clientUrl: client.url,
     niche: client.niche,

@@ -13,6 +13,7 @@ export type ActivityKind =
   | "report.generated"
   | "outreach.contacted"
   | "outreach.replied"
+  | "outreach.sent"
   | "google.connected"
   | "google.disconnected"
   | "google.credentials_cleared";

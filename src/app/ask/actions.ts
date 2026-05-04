@@ -132,6 +132,8 @@ Be specific, action-oriented, and concise. Cite which data point you're reasonin
     user: question,
     maxTokens: 800,
     temperature: 0.4,
+    feature: "general",
+    clientId: input.clientId ?? null,
   });
 
   if (!answer) {

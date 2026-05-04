@@ -3,6 +3,7 @@ import type { GscKeyword } from "./google-data";
 
 export type BlogWriteRequest = {
   /** Brand context */
+  clientId?: number;
   clientName: string;
   clientUrl: string;
   niche: string | null;
@@ -151,6 +152,9 @@ export async function writeBlogPost(
     maxTokens,
     temperature: 0.7,
     timeoutMs: 90_000,
+    feature: "blog_draft",
+    clientId: req.clientId ?? null,
+    ignoreCreditSaver: true,
   });
 
   if (!result) {

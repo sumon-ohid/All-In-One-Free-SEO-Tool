@@ -40,11 +40,22 @@ export type SettingKey =
   | "smtp.secure"
   | "schedule_runner.last_run"
   | "page_monitor_runner.last_run"
+  | "daily_agent_runner.last_run"
+  | "news_runner.last_run"
+  | "news_runner.last_seen_at"
+  | "seen.news.last_seen_at"
+  | "seen.suggestions.last_seen_at"
+  | "seen.page_changes.last_seen_at"
+  | "seen.activity.last_seen_at"
   | "api.pagespeed"
   // Credit-saver mode: cap maxTokens, force terse system prompt, lower temp.
   // ON keeps token use under ~500/answer for cheap providers like Gemini /
   // Groq free tiers. OFF gives full-quality long-form answers (defaults OFF).
-  | "ai.credit_saver.enabled";
+  | "ai.credit_saver.enabled"
+  | "outreach.sender_name"
+  | "indexnow.key"
+  | "bing.api_key"
+  | "youtube.api_key";
 
 export async function getSetting<T = unknown>(
   key: SettingKey,

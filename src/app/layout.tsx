@@ -5,6 +5,7 @@ import { TopBar } from "@/components/shell/top-bar";
 import { AIAssistant } from "@/components/shell/ai-assistant";
 import { ServiceWorkerRegister } from "@/components/shell/sw-register";
 import { QuickAddClientProvider } from "@/components/shell/quick-add-client-dialog";
+import { getUnreadCounts } from "@/lib/unread-counts";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,11 +35,25 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Fetch unread counts so the sidebar can render badges next to sections
+  // with new content. Failure is non-fatal — empty counts = no badges.
+  let unreadByHref: Record<string, number> = {};
+  try {
+    const u = await getUnreadCounts();
+    unreadByHref = {
+      "/news": u.news,
+      "/agent": u.suggestions,
+      "/monitor": u.pageChanges,
+    };
+  } catch {
+    unreadByHref = {};
+  }
+
   return (
     <html
       lang="en"
@@ -48,7 +63,7 @@ export default function RootLayout({
       <body className="h-screen overflow-hidden bg-background text-foreground">
         <QuickAddClientProvider>
           <div className="flex h-full">
-            <Sidebar />
+            <Sidebar unreadByHref={unreadByHref} />
             <div className="flex h-full min-w-0 flex-1 flex-col">
               <TopBar />
               <main className="flex-1 overflow-y-auto px-8 py-8">

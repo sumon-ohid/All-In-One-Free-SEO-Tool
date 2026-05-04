@@ -10,8 +10,10 @@ import {
   type ClientToolCard,
 } from "@/components/shell/client-tool-grid";
 import { configuredProviders, getActiveProvider } from "@/lib/api-keys";
+import { markSectionSeen } from "@/lib/unread-counts";
 
 export default async function AgentIndexPage() {
+  await markSectionSeen("suggestions").catch(() => {});
   const all = await db.select().from(clients).orderBy(desc(clients.createdAt));
   const active = await getActiveProvider();
   const { byId } = await configuredProviders();

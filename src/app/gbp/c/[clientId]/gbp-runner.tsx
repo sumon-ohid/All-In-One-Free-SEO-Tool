@@ -13,6 +13,7 @@ import {
   Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AiFeedback } from "@/components/ai-feedback";
 import {
   runGbpScrape,
   generateReviewReply,
@@ -124,6 +125,7 @@ export function GbpRunner({
                     key={i}
                     review={r}
                     businessName={report.name ?? clientName}
+                    clientId={clientId}
                   />
                 ))}
               </ul>
@@ -143,9 +145,11 @@ export function GbpRunner({
 function ReviewRow({
   review,
   businessName,
+  clientId,
 }: {
   review: GbpReview;
   businessName: string;
+  clientId: number;
 }) {
   const [pending, startTransition] = useTransition();
   const [reply, setReply] = useState<string | null>(null);
@@ -245,7 +249,7 @@ function ReviewRow({
               <div className="whitespace-pre-wrap text-foreground/90">
                 {reply}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -255,9 +259,15 @@ function ReviewRow({
                   <Copy className="size-3.5" />
                   {copied ? "Copied" : "Copy reply"}
                 </Button>
+                <AiFeedback
+                  feature="review_reply"
+                  aiOutput={reply}
+                  clientId={clientId}
+                  size="sm"
+                />
                 <span className="text-[11px] text-muted-foreground">
-                  Paste into the reply box on GBP. Direct posting requires
-                  Google&apos;s Business Profile API auth (not supported yet).
+                  Paste into the reply box on GBP, or use the official
+                  posting flow if your Google account has GBP scope.
                 </span>
               </div>
             </div>

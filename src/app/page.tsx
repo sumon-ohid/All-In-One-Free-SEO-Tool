@@ -25,6 +25,7 @@ import {
   tickPageMonitorRunner,
   tickScheduleRunner,
 } from "@/lib/report-mailer";
+import { tickDailyAgent } from "@/lib/daily-agent";
 
 const priorityVariant: Record<
   string,
@@ -43,10 +44,11 @@ function greetingForHour(hour: number) {
 }
 
 export default async function DashboardPage() {
-  // Fire-and-forget schedulers — both have their own cooldowns so they're
+  // Fire-and-forget schedulers — each has its own cooldown so they're
   // no-ops on most renders. Failures don't block the dashboard.
   tickScheduleRunner().catch(() => {});
   tickPageMonitorRunner().catch(() => {});
+  tickDailyAgent().catch(() => {});
 
   const [{ value: clientCount }] = await db
     .select({ value: count() })

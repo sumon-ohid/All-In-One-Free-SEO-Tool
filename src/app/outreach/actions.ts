@@ -1,11 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { outreachContacts } from "@/db/schema";
+import {
+  outreachContacts,
+  outreachMessages,
+  outreachTemplates,
+} from "@/db/schema";
 import { logActivity } from "@/lib/activity";
+import {
+  DEFAULT_TEMPLATES,
+  extractVariables,
+  sendOutreachEmail,
+} from "@/lib/outreach";
+import { getSetting } from "@/lib/settings-store";
 
 const inputSchema = z.object({
   clientId: z.coerce.number().int().positive(),
@@ -66,6 +76,7 @@ export async function addOutreachContact(
     .returning({ id: outreachContacts.id });
 
   revalidatePath("/outreach");
+  revalidatePath(`/outreach/c/${parsed.data.clientId}`);
   return { ok: true, id: row.id };
 }
 
@@ -103,7 +114,7 @@ export async function setContactStatus(
     } else if (status === "replied" || status === "won") {
       await logActivity({
         kind: "outreach.replied",
-        message: `Outreach: ${row.name} ${status === "won" ? "won 🎉" : "replied"}.`,
+        message: `Outreach: ${row.name} ${status === "won" ? "won" : "replied"}.`,
         level: "success",
         clientId: row.clientId,
         entityType: "outreach",
@@ -113,10 +124,206 @@ export async function setContactStatus(
   }
 
   revalidatePath("/outreach");
+  if (row) revalidatePath(`/outreach/c/${row.clientId}`);
 }
 
 export async function deleteOutreachContact(contactId: number) {
   if (!Number.isFinite(contactId) || contactId <= 0) return;
+  const [row] = await db
+    .select({ clientId: outreachContacts.clientId })
+    .from(outreachContacts)
+    .where(eq(outreachContacts.id, contactId))
+    .limit(1);
   await db.delete(outreachContacts).where(eq(outreachContacts.id, contactId));
   revalidatePath("/outreach");
+  if (row) revalidatePath(`/outreach/c/${row.clientId}`);
 }
+
+// =============== templates ===============
+
+const templateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  subject: z.string().trim().min(1).max(300),
+  body: z.string().trim().min(1).max(20_000),
+  clientId: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+});
+
+export type SaveTemplateResult =
+  | { ok: true; id: number }
+  | { ok: false; error: string };
+
+export async function saveOutreachTemplate(
+  _prev: SaveTemplateResult | null,
+  formData: FormData,
+): Promise<SaveTemplateResult> {
+  const idRaw = formData.get("id");
+  const id = idRaw ? Number(idRaw) : null;
+
+  const parsed = templateSchema.safeParse({
+    name: formData.get("name"),
+    subject: formData.get("subject"),
+    body: formData.get("body"),
+    clientId: formData.get("clientId") || undefined,
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const variables = extractVariables(parsed.data.subject, parsed.data.body);
+
+  if (id && Number.isFinite(id) && id > 0) {
+    await db
+      .update(outreachTemplates)
+      .set({
+        name: parsed.data.name,
+        subject: parsed.data.subject,
+        body: parsed.data.body,
+        variables,
+        clientId: parsed.data.clientId ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(outreachTemplates.id, id));
+    revalidatePath("/outreach/templates");
+    return { ok: true, id };
+  }
+
+  const [row] = await db
+    .insert(outreachTemplates)
+    .values({
+      name: parsed.data.name,
+      subject: parsed.data.subject,
+      body: parsed.data.body,
+      variables,
+      clientId: parsed.data.clientId ?? null,
+    })
+    .returning({ id: outreachTemplates.id });
+
+  revalidatePath("/outreach/templates");
+  return { ok: true, id: row.id };
+}
+
+export async function deleteOutreachTemplate(id: number) {
+  if (!Number.isFinite(id) || id <= 0) return;
+  await db.delete(outreachTemplates).where(eq(outreachTemplates.id, id));
+  revalidatePath("/outreach/templates");
+}
+
+/**
+ * Seed the four built-in templates the first time the templates page is
+ * opened. Idempotent — once the table has any row, never re-seeds.
+ */
+export async function seedDefaultTemplatesIfEmpty(): Promise<void> {
+  const existing = await db
+    .select({ id: outreachTemplates.id })
+    .from(outreachTemplates)
+    .limit(1);
+  if (existing.length > 0) return;
+  await db.insert(outreachTemplates).values(
+    DEFAULT_TEMPLATES.map((t) => ({
+      name: t.name,
+      subject: t.subject,
+      body: t.body,
+      variables: extractVariables(t.subject, t.body),
+    })),
+  );
+}
+
+// =============== send ===============
+
+export type SendResultState =
+  | { ok: true; messageId: number }
+  | { ok: false; error: string }
+  | null;
+
+const sendSchema = z.object({
+  contactId: z.coerce.number().int().positive(),
+  templateId: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  subject: z.string().trim().min(1).max(300),
+  body: z.string().trim().min(1).max(20_000),
+});
+
+export async function sendOutreachAction(
+  _prev: SendResultState,
+  formData: FormData,
+): Promise<SendResultState> {
+  const parsed = sendSchema.safeParse({
+    contactId: formData.get("contactId"),
+    templateId: formData.get("templateId") || undefined,
+    subject: formData.get("subject"),
+    body: formData.get("body"),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
+  }
+
+  const myName =
+    (await getSetting<string>("outreach.sender_name")) ?? undefined;
+
+  const [contact] = await db
+    .select({ clientId: outreachContacts.clientId })
+    .from(outreachContacts)
+    .where(eq(outreachContacts.id, parsed.data.contactId))
+    .limit(1);
+
+  const result = await sendOutreachEmail({
+    contactId: parsed.data.contactId,
+    templateId: parsed.data.templateId ?? null,
+    subject: parsed.data.subject,
+    body: parsed.data.body,
+    myName,
+  });
+
+  revalidatePath("/outreach");
+  if (contact) revalidatePath(`/outreach/c/${contact.clientId}`);
+  return result;
+}
+
+/**
+ * Loads templates available for a given client: the client's own templates
+ * plus workspace-wide ones (clientId IS NULL).
+ */
+export async function loadTemplatesForClient(clientId: number) {
+  return db
+    .select()
+    .from(outreachTemplates)
+    .where(
+      or(
+        isNull(outreachTemplates.clientId),
+        eq(outreachTemplates.clientId, clientId),
+      ),
+    )
+    .orderBy(outreachTemplates.name);
+}
+
+export async function loadMessagesForContact(contactId: number) {
+  return db
+    .select()
+    .from(outreachMessages)
+    .where(eq(outreachMessages.contactId, contactId))
+    .orderBy(outreachMessages.sentAt);
+}
+
+export async function setSenderName(formData: FormData) {
+  const name = String(formData.get("senderName") ?? "").trim().slice(0, 120);
+  const { setSetting } = await import("@/lib/settings-store");
+  await setSetting("outreach.sender_name", name);
+  revalidatePath("/outreach");
+  revalidatePath("/outreach/templates");
+}
+

@@ -5,6 +5,16 @@ import { db } from "@/db/client";
 import { clients } from "@/db/schema";
 import { scrapeGbp, type GbpReport } from "@/lib/gbp-scraper";
 import { callAI } from "@/lib/ai-call";
+import {
+  GbpScopeMissingError,
+  fetchGbpLocationSummary,
+  listGbpAccounts,
+  listGbpLocations,
+  listGbpReviews,
+  replyToGbpReview,
+  type GbpLocation,
+  type GbpReview,
+} from "@/lib/gbp-api";
 
 export type RunGbpResult =
   | { ok: true; report: GbpReport }
@@ -78,6 +88,7 @@ export async function generateReviewReply(opts: {
     maxTokens: 400,
     temperature: 0.5,
     timeoutMs: 30_000,
+    feature: "review_reply",
   });
 
   if (!raw) {
@@ -87,4 +98,104 @@ export async function generateReviewReply(opts: {
     };
   }
   return { ok: true, reply: raw.trim().replace(/^["']|["']$/g, "") };
+}
+
+// =============== Official GBP API path ===============
+
+export type GbpApiState =
+  | {
+      ok: true;
+      accounts: { name: string; accountName: string; type: string }[];
+      locations: GbpLocation[];
+      reviews: GbpReview[];
+      selectedLocation: string | null;
+    }
+  | { ok: false; error: string; scopeMissing?: boolean };
+
+export async function loadGbpForClient(
+  clientId: number,
+  selectedLocation?: string,
+): Promise<GbpApiState> {
+  const [client] = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .limit(1);
+  if (!client) return { ok: false, error: "Client not found" };
+
+  try {
+    const accounts = await listGbpAccounts({ clientIdScope: clientId });
+    if (accounts.length === 0) {
+      return {
+        ok: true,
+        accounts: [],
+        locations: [],
+        reviews: [],
+        selectedLocation: null,
+      };
+    }
+    // Use first account by default (most users have only one)
+    const acct = accounts[0];
+    const locations = await listGbpLocations({
+      accountName: acct.name,
+      clientIdScope: clientId,
+    });
+    const locName = selectedLocation ?? locations[0]?.name ?? null;
+    let reviews: GbpReview[] = [];
+    if (locName) {
+      try {
+        reviews = await listGbpReviews({
+          locationName: locName,
+          clientIdScope: clientId,
+        });
+      } catch {
+        reviews = [];
+      }
+    }
+    return {
+      ok: true,
+      accounts,
+      locations,
+      reviews,
+      selectedLocation: locName,
+    };
+  } catch (err) {
+    if (err instanceof GbpScopeMissingError) {
+      return {
+        ok: false,
+        error: err.message,
+        scopeMissing: true,
+      };
+    }
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+export async function postGbpReply(opts: {
+  clientId: number;
+  reviewName: string;
+  comment: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!opts.comment.trim()) return { ok: false, error: "Reply is empty" };
+  return await replyToGbpReview({
+    reviewName: opts.reviewName,
+    comment: opts.comment.trim(),
+    clientIdScope: opts.clientId,
+  });
+}
+
+/** Used by health checks: confirm the location is reachable via the API. */
+export async function pingGbpLocation(opts: {
+  clientId: number;
+  locationName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const loc = await fetchGbpLocationSummary({
+      locationName: opts.locationName,
+      clientIdScope: opts.clientId,
+    });
+    return { ok: !!loc };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
 }

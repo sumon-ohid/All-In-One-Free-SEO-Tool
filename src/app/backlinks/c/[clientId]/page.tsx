@@ -9,7 +9,9 @@ import { backlinks, clients } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { AddBacklinkForm } from "@/app/backlinks/add-form";
+import { LogLinkForm } from "@/app/backlinks/log-link-form";
 import { setBacklinkStatus, deleteBacklink } from "@/app/backlinks/actions";
+import { ClientInfoCard } from "@/components/client-info-card";
 
 const statusTone: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
@@ -98,6 +100,23 @@ export default async function PerClientBacklinksPage({
           ) : undefined
         }
       />
+
+      <ClientInfoCard
+        info={{
+          name: client.name,
+          url: client.url,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          description: client.description,
+          city: client.city,
+          country: client.country,
+          businessType: client.businessType,
+          shortDescription: client.description?.split(".")[0] ?? null,
+        }}
+      />
+
+      <LogLinkForm clientId={client.id} defaultTargetUrl={client.url} />
 
       <AddBacklinkForm clients={[{ id: client.id, name: client.name }]} />
 
