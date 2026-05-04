@@ -194,9 +194,40 @@ export async function logBuiltLink(
     })
     .returning({ id: backlinks.id });
 
+  // Auto-create a short link if a target URL was provided so we get
+  // click attribution for traffic coming from this placed link.
+  let shortSlug: string | null = null;
+  if (parsed.data.targetUrl) {
+    try {
+      const { findUniqueSlug } = await import("@/lib/short-links");
+      const { shortLinks } = await import("@/db/schema");
+      shortSlug = await findUniqueSlug();
+      await db.insert(shortLinks).values({
+        clientId: parsed.data.clientId,
+        slug: shortSlug,
+        destination: parsed.data.targetUrl,
+        label: `Auto: ${sourceDomain}`,
+        utmSource: sourceDomain,
+        utmMedium: "backlink",
+        utmCampaign: `link-build-${parsed.data.method}`,
+      });
+      await db
+        .update(backlinks)
+        .set({
+          notes:
+            (parsed.data.notes ?? "") +
+            (parsed.data.notes ? "\n" : "") +
+            `Tracking: /r/${shortSlug}`,
+        })
+        .where(eq(backlinks.id, row.id));
+    } catch {
+      shortSlug = null;
+    }
+  }
+
   await logActivity({
     kind: "task.completed",
-    message: `Logged link from ${sourceDomain} (method: ${parsed.data.method})`,
+    message: `Logged link from ${sourceDomain} (method: ${parsed.data.method})${shortSlug ? ` · short link /r/${shortSlug}` : ""}`,
     level: "success",
     clientId: parsed.data.clientId,
     entityType: "backlink",
@@ -206,5 +237,6 @@ export async function logBuiltLink(
   revalidatePath("/backlinks");
   revalidatePath(`/backlinks/c/${parsed.data.clientId}`);
   revalidatePath(`/clients/${parsed.data.clientId}`);
+  revalidatePath("/links");
   return { ok: true, id: row.id };
 }

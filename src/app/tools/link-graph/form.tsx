@@ -92,6 +92,27 @@ export function LinkGraphForm() {
             />
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <DownloadButton
+              filename="link-graph.json"
+              mime="application/json"
+              content={JSON.stringify(state.analysis, null, 2)}
+              label="JSON"
+            />
+            <DownloadButton
+              filename="link-graph-pages.csv"
+              mime="text/csv"
+              content={pagesToCsv(state.analysis.pages)}
+              label="Pages CSV"
+            />
+            <DownloadButton
+              filename="link-graph-orphans.csv"
+              mime="text/csv"
+              content={orphansToCsv(state.analysis.suggestions)}
+              label="Orphan suggestions CSV"
+            />
+          </div>
+
           {state.analysis.suggestions.length > 0 && (
             <section className="glass-apple relative overflow-hidden rounded-2xl">
               <header className="border-b border-white/[0.06] px-5 py-4">
@@ -192,6 +213,64 @@ export function LinkGraphForm() {
       )}
     </>
   );
+}
+
+function DownloadButton({
+  filename,
+  mime,
+  content,
+  label,
+}: {
+  filename: string;
+  mime: string;
+  content: string;
+  label: string;
+}) {
+  const dataUri = `data:${mime};charset=utf-8,${encodeURIComponent(content)}`;
+  return (
+    <a
+      href={dataUri}
+      download={filename}
+      className="inline-flex h-8 items-center gap-1 rounded-md bg-white/5 px-3 text-[11px] font-medium text-muted-foreground ring-1 ring-inset ring-white/10 hover:bg-white/10 hover:text-foreground"
+    >
+      ↓ {label}
+    </a>
+  );
+}
+
+function pagesToCsv(
+  pages: { url: string; title: string; inbound: number; outbound: number; wordCount: number }[],
+): string {
+  const header = "url,title,inbound,outbound,word_count\n";
+  const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  return (
+    header +
+    pages
+      .map(
+        (p) =>
+          `${escape(p.url)},${escape(p.title)},${p.inbound},${p.outbound},${p.wordCount}`,
+      )
+      .join("\n")
+  );
+}
+
+function orphansToCsv(
+  suggestions: {
+    orphanUrl: string;
+    candidates: { url: string; score: number; titleSnippet: string }[];
+  }[],
+): string {
+  const header = "orphan_url,candidate_url,similarity_score,candidate_title\n";
+  const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const rows: string[] = [];
+  for (const s of suggestions) {
+    for (const c of s.candidates) {
+      rows.push(
+        `${escape(s.orphanUrl)},${escape(c.url)},${c.score.toFixed(4)},${escape(c.titleSnippet)}`,
+      );
+    }
+  }
+  return header + rows.join("\n");
 }
 
 function Stat({

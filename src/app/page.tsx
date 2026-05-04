@@ -20,6 +20,7 @@ import Link from "next/link";
 import { PortfolioTrafficPanel } from "./portfolio-traffic-panel";
 import { PortfolioQuickWinsPanel } from "./portfolio-quick-wins-panel";
 import { MorningBriefing } from "./morning-briefing";
+import { AgencyWeekInReview } from "./agency-week";
 import { WelcomeTour } from "./welcome-tour";
 import {
   tickPageMonitorRunner,
@@ -247,6 +248,13 @@ export default async function DashboardPage() {
       {!isFresh && (
         <Suspense fallback={null}>
           <MorningBriefing />
+        </Suspense>
+      )}
+
+      {/* AGENCY WEEK IN REVIEW — aggregate activity across all clients */}
+      {!isFresh && (
+        <Suspense fallback={null}>
+          <AgencyWeekInReview />
         </Suspense>
       )}
 

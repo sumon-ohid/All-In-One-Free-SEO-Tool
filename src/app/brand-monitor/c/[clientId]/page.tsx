@@ -16,6 +16,8 @@ import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { RunButton } from "./run-button";
 import { deleteMention } from "../../actions";
 import { markSectionSeen } from "@/lib/unread-counts";
+import { SentimentChart, type SentimentBucket } from "./sentiment-chart";
+import { MentionToOutreachButton } from "./mention-to-outreach";
 
 void markSectionSeen;
 
@@ -96,6 +98,17 @@ export default async function PerClientBrandMonitorPage({
         <Stat label="Linked to site" value={summary.unlinked} tone="violet" />
       </div>
 
+      {mentions.length > 0 && (
+        <section className="glass-apple relative overflow-hidden rounded-2xl">
+          <header className="border-b border-white/[0.06] px-5 py-4">
+            <h2 className="text-base font-semibold">Sentiment trend (60 days)</h2>
+          </header>
+          <div className="p-5">
+            <SentimentChart buckets={bucketSentiment(mentions, 60)} />
+          </div>
+        </section>
+      )}
+
       {mentions.length === 0 ? (
         <div className="glass-apple rounded-2xl px-6 py-12 text-center text-sm text-muted-foreground">
           No mentions yet. Click <strong>Scan now</strong> above.
@@ -150,15 +163,23 @@ export default async function PerClientBrandMonitorPage({
                       </p>
                     )}
                   </div>
-                  <form action={deleteMention.bind(null, m.id)}>
-                    <button
-                      type="submit"
-                      aria-label="Delete"
-                      className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-rose-500/15 hover:text-rose-300"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </form>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <MentionToOutreachButton
+                      mentionId={m.id}
+                      clientId={clientId}
+                      authorName={m.author}
+                      url={m.url}
+                    />
+                    <form action={deleteMention.bind(null, m.id)}>
+                      <button
+                        type="submit"
+                        aria-label="Delete"
+                        className="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-rose-500/15 hover:text-rose-300"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </li>
             ))}
@@ -167,6 +188,34 @@ export default async function PerClientBrandMonitorPage({
       )}
     </div>
   );
+}
+
+function bucketSentiment(
+  mentions: { sentiment: number; publishedAt: Date | null; capturedAt: Date }[],
+  days: number,
+): SentimentBucket[] {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const buckets = new Map<string, SentimentBucket>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    buckets.set(key, { date: key, positive: 0, neutral: 0, negative: 0 });
+  }
+  const cutoff = new Date(today);
+  cutoff.setUTCDate(cutoff.getUTCDate() - days);
+  for (const m of mentions) {
+    const dt = m.publishedAt ?? m.capturedAt;
+    if (dt < cutoff) continue;
+    const key = dt.toISOString().slice(0, 10);
+    const b = buckets.get(key);
+    if (!b) continue;
+    if (m.sentiment > 0) b.positive++;
+    else if (m.sentiment < 0) b.negative++;
+    else b.neutral++;
+  }
+  return Array.from(buckets.values());
 }
 
 function Stat({

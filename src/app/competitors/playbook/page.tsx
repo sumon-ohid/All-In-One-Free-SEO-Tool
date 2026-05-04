@@ -1,10 +1,18 @@
 export const dynamic = "force-dynamic";
 
 import { Network } from "lucide-react";
+import { db } from "@/db/client";
+import { clients } from "@/db/schema";
+import { asc } from "drizzle-orm";
 import { PageHeader } from "@/components/shell/page-header";
 import { PlaybookForm } from "./playbook-form";
 
-export default function CompetitorPlaybookPage() {
+export default async function CompetitorPlaybookPage() {
+  const allClients = await db
+    .select({ id: clients.id, name: clients.name })
+    .from(clients)
+    .orderBy(asc(clients.name));
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
@@ -13,7 +21,7 @@ export default function CompetitorPlaybookPage() {
         icon={Network}
         accent="violet"
       />
-      <PlaybookForm />
+      <PlaybookForm clients={allClients} />
     </div>
   );
 }

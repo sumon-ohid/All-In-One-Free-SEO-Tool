@@ -54,7 +54,20 @@ export function GridHistory({ grids }: { grids: GridSnapshot[] }) {
             </button>
             {openId === g.id && (
               <div className="mt-3">
-                <Heatmap cells={g.cells} size={g.gridSize} />
+                <Heatmap
+                  cells={g.cells}
+                  size={g.gridSize}
+                  prior={
+                    grids.find(
+                      (other) =>
+                        other.id !== g.id &&
+                        other.query === g.query &&
+                        other.gridSize === g.gridSize &&
+                        new Date(other.ranAt).getTime() <
+                          new Date(g.ranAt).getTime(),
+                    )?.cells ?? null
+                  }
+                />
               </div>
             )}
           </li>

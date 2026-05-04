@@ -835,6 +835,36 @@ export const localGridChecks = sqliteTable("local_grid_checks", {
     .default(sql`(unixepoch())`),
 });
 
+export const clientMetricSnapshots = sqliteTable("client_metric_snapshots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  kind: text("kind", {
+    enum: ["baseline", "weekly", "monthly", "manual"],
+  })
+    .notNull()
+    .default("weekly"),
+  healthScore: integer("health_score"),
+  organicClicks: integer("organic_clicks"),
+  organicImpressions: integer("organic_impressions"),
+  organicAvgPositionX100: integer("organic_avg_position_x100"),
+  ga4Sessions: integer("ga4_sessions"),
+  ga4Users: integer("ga4_users"),
+  keywordCount: integer("keyword_count"),
+  avgRankX100: integer("avg_rank_x100"),
+  top10Count: integer("top10_count"),
+  criticalIssues: integer("critical_issues"),
+  highIssues: integer("high_issues"),
+  backlinkCount: integer("backlink_count"),
+  gbpScore: integer("gbp_score"),
+  mentionCount: integer("mention_count"),
+  tasksDoneRecent: integer("tasks_done_recent"),
+  capturedAt: integer("captured_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 export const aiFeedback = sqliteTable("ai_feedback", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   /** What kind of AI output this critiques. */
@@ -961,6 +991,8 @@ export type BrandMention = typeof brandMentions.$inferSelect;
 export type NewBrandMention = typeof brandMentions.$inferInsert;
 export type LocalGridCheck = typeof localGridChecks.$inferSelect;
 export type NewLocalGridCheck = typeof localGridChecks.$inferInsert;
+export type ClientMetricSnapshot = typeof clientMetricSnapshots.$inferSelect;
+export type NewClientMetricSnapshot = typeof clientMetricSnapshots.$inferInsert;
 export type AiFeedback = typeof aiFeedback.$inferSelect;
 export type NewAiFeedback = typeof aiFeedback.$inferInsert;
 export type AiPreference = typeof aiPreferences.$inferSelect;

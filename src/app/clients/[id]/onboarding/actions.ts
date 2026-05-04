@@ -357,6 +357,16 @@ export async function generateMonthlyCalendar(
     await db.insert(tasks).values(rows);
   }
 
+  // Capture the baseline snapshot now so the next monthly report can show
+  // "since you started" delta. Best-effort — failure shouldn't block plan
+  // generation.
+  try {
+    const { captureClientSnapshot } = await import("@/lib/client-snapshots");
+    await captureClientSnapshot({ clientId: c.id, kind: "baseline" });
+  } catch {
+    // ignore
+  }
+
   await db
     .update(clients)
     .set({

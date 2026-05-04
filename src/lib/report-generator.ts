@@ -16,6 +16,11 @@ import {
 import { getSetting } from "./settings-store";
 import { generateExecSummary } from "./ai-summary";
 import {
+  captureClientSnapshot,
+  loadSnapshotComparison,
+  type SnapshotComparison,
+} from "./client-snapshots";
+import {
   getGscTopQueries,
   getGscQuickWins,
   getGa4OrganicTraffic,
@@ -380,6 +385,21 @@ export async function generateReportPdf(
     return Boolean(r.url);
   });
 
+  // Capture a fresh monthly snapshot every time a report is generated, then
+  // load the comparison so the report can render "since baseline" + "since
+  // last month" deltas. Best-effort — never fails the PDF.
+  let snapshotComparison: SnapshotComparison = {
+    latest: null,
+    prior: null,
+    baseline: null,
+  };
+  try {
+    await captureClientSnapshot({ clientId, kind: "monthly" });
+    snapshotComparison = await loadSnapshotComparison(clientId);
+  } catch {
+    // ignore
+  }
+
   // AI suggestions applied this period (status = "applied")
   const suggestionsApplied = await db
     .select({
@@ -577,6 +597,56 @@ export async function generateReportPdf(
     .text(exec, { lineGap: 4 });
 
   doc.moveDown(1.5);
+
+  // === Performance over time (snapshot delta) ===
+  if (
+    template !== "technical" &&
+    snapshotComparison.latest &&
+    (snapshotComparison.baseline || snapshotComparison.prior)
+  ) {
+    drawSectionHeading(doc, "Performance over time");
+    const cur = snapshotComparison.latest;
+    const base = snapshotComparison.baseline;
+    const prior = snapshotComparison.prior;
+    if (base) {
+      doc
+        .font("Helvetica")
+        .fillColor(palette.mute)
+        .fontSize(9)
+        .text(
+          `Since baseline (${base.capturedAt.toLocaleDateString()}, ~${Math.max(
+            1,
+            Math.round(
+              (Date.now() - base.capturedAt.getTime()) / 86_400_000,
+            ),
+          )} days ago):`,
+        );
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(palette.ink);
+      drawDeltaRow(doc, "Health score", base.healthScore, cur.healthScore);
+      drawDeltaRow(doc, "Organic clicks (28d)", base.organicClicks, cur.organicClicks);
+      drawDeltaRow(doc, "Organic impressions (28d)", base.organicImpressions, cur.organicImpressions);
+      drawDeltaRow(doc, "GA4 sessions (28d)", base.ga4Sessions, cur.ga4Sessions);
+      drawDeltaRow(doc, "Top-10 keywords", base.top10Count, cur.top10Count);
+      drawDeltaRow(doc, "Backlinks (logged)", base.backlinkCount, cur.backlinkCount);
+      drawDeltaRow(doc, "GBP playbook %", base.gbpScore, cur.gbpScore);
+      doc.moveDown(0.5);
+    }
+    if (prior && prior !== base) {
+      doc
+        .font("Helvetica")
+        .fillColor(palette.mute)
+        .fontSize(9)
+        .text(`Since last snapshot (${prior.capturedAt.toLocaleDateString()}):`);
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(palette.ink);
+      drawDeltaRow(doc, "Health score", prior.healthScore, cur.healthScore);
+      drawDeltaRow(doc, "Organic clicks (28d)", prior.organicClicks, cur.organicClicks);
+      drawDeltaRow(doc, "Top-10 keywords", prior.top10Count, cur.top10Count);
+      doc.moveDown(0.5);
+    }
+    doc.moveDown(0.5);
+  }
 
   // === Performance highlights === (skip on technical)
   if (template !== "technical") {
@@ -1048,6 +1118,63 @@ function drawKeyValueRow(doc: PDFKit.PDFDocument, key: string, value: string) {
       width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
     });
   doc.moveDown(0.4);
+}
+
+/**
+ * Render a metric row showing prior → current with a coloured delta.
+ * For metrics where lower is better (avg position, issues), set inverted.
+ */
+function drawDeltaRow(
+  doc: PDFKit.PDFDocument,
+  label: string,
+  prior: number | null,
+  current: number | null,
+  opts?: { inverted?: boolean },
+) {
+  if (prior === null || current === null) return;
+  const delta = current - prior;
+  const inverted = opts?.inverted ?? false;
+  const isUp = delta > 0;
+  const isFlat = Math.abs(delta) < 0.5;
+  const direction = isFlat ? "→" : isUp ? "↑" : "↓";
+  const isGood = isFlat ? null : inverted ? !isUp : isUp;
+  const arrowColor = isFlat
+    ? palette.mute
+    : isGood
+      ? "#34d399"
+      : "#f87171";
+
+  ensureSpace(doc, 22);
+  const startY = doc.y;
+  doc
+    .fillColor(palette.mute)
+    .font("Helvetica")
+    .fontSize(10)
+    .text(label, doc.page.margins.left, startY, { continued: false });
+
+  const valueText = `${prior} → ${current}`;
+  doc
+    .fillColor(palette.ink)
+    .font("Helvetica-Bold")
+    .text(valueText, doc.page.margins.left, startY, {
+      align: "right",
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+    });
+
+  // Arrow + delta below the row, right-aligned
+  const deltaPct =
+    prior !== 0
+      ? ` (${delta > 0 ? "+" : ""}${Math.round((delta / prior) * 100)}%)`
+      : "";
+  doc
+    .fontSize(9)
+    .fillColor(arrowColor)
+    .text(`${direction} ${delta > 0 ? "+" : ""}${delta}${deltaPct}`, {
+      align: "right",
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+    });
+  doc.fillColor(palette.ink).fontSize(10);
+  doc.moveDown(0.2);
 }
 
 function drawKeywordTable(

@@ -9,9 +9,11 @@ type Cell = { lat: number; lng: number; position: number | null };
 export function Heatmap({
   cells,
   size,
+  prior,
 }: {
   cells: Cell[];
   size: number;
+  prior?: Cell[] | null;
 }) {
   if (cells.length === 0) {
     return (
@@ -24,6 +26,12 @@ export function Heatmap({
   const rows: Cell[][] = [];
   for (let r = 0; r < size; r++) {
     rows.unshift(cells.slice(r * size, (r + 1) * size));
+  }
+  const priorRows: Cell[][] = [];
+  if (prior && prior.length === cells.length) {
+    for (let r = 0; r < size; r++) {
+      priorRows.unshift(prior.slice(r * size, (r + 1) * size));
+    }
   }
 
   const tile = 64;
@@ -41,14 +49,31 @@ export function Heatmap({
             const x = cIdx * (tile + gap);
             const y = rIdx * (tile + gap);
             const tone = positionTone(cell.position);
+            const priorCell = priorRows[rIdx]?.[cIdx];
+            const delta = computeDelta(priorCell?.position ?? null, cell.position);
             return (
               <div
                 key={`${rIdx}-${cIdx}`}
-                title={`(${cell.lat.toFixed(4)}, ${cell.lng.toFixed(4)}) — ${cell.position ?? "not ranked"}`}
+                title={`(${cell.lat.toFixed(4)}, ${cell.lng.toFixed(4)}) — ${cell.position ?? "not ranked"}${delta ? ` · was ${priorCell?.position ?? "—"}` : ""}`}
                 style={{ left: x, top: y, width: tile, height: tile }}
                 className={`absolute grid place-items-center rounded-md text-xs font-bold tabular-nums ring-1 ring-inset ${tone}`}
               >
-                {cell.position ?? "—"}
+                <div className="flex flex-col items-center justify-center leading-tight">
+                  <span>{cell.position ?? "—"}</span>
+                  {delta && (
+                    <span
+                      className={`text-[9px] font-bold ${
+                        delta.tone === "up"
+                          ? "text-emerald-200"
+                          : delta.tone === "down"
+                            ? "text-rose-200"
+                            : "text-foreground/60"
+                      }`}
+                    >
+                      {delta.label}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           }),
@@ -57,6 +82,21 @@ export function Heatmap({
       <Legend />
     </div>
   );
+}
+
+function computeDelta(
+  prior: number | null,
+  current: number | null,
+): { label: string; tone: "up" | "down" | "flat" } | null {
+  if (prior === null && current === null) return null;
+  if (prior === null) return { label: "new", tone: "up" };
+  if (current === null) return { label: "lost", tone: "down" };
+  const diff = prior - current;
+  if (Math.abs(diff) < 1) return { label: "→", tone: "flat" };
+  return {
+    label: `${diff > 0 ? "▲" : "▼"}${Math.abs(diff)}`,
+    tone: diff > 0 ? "up" : "down",
+  };
 }
 
 function positionTone(p: number | null): string {

@@ -1,21 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import {
   CheckCircle2,
   ExternalLink,
   Globe,
   Layers,
   Link2,
+  ListChecks,
   Loader2,
   MapPin,
   Sparkles,
   XCircle,
 } from "lucide-react";
-import { runCompetitorAnalysis, type PlaybookState } from "./actions";
+import { playbookToTasks, runCompetitorAnalysis, type PlaybookState } from "./actions";
 import { AiFeedback } from "@/components/ai-feedback";
 
-export function PlaybookForm() {
+export function PlaybookForm({
+  clients,
+}: {
+  clients: { id: number; name: string }[];
+}) {
   const [state, formAction, pending] = useActionState<
     PlaybookState | null,
     FormData
@@ -95,11 +100,18 @@ export function PlaybookForm() {
                 <p className="whitespace-pre-wrap text-sm">
                   {state.playbook.synthesis}
                 </p>
-                <AiFeedback
-                  feature="general"
-                  aiOutput={state.playbook.synthesis}
-                  size="sm"
-                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <AiFeedback
+                    feature="general"
+                    aiOutput={state.playbook.synthesis}
+                    size="sm"
+                  />
+                  <PlaybookToTasksButton
+                    clients={clients}
+                    competitorUrl={state.playbook.competitorUrl}
+                    synthesis={state.playbook.synthesis}
+                  />
+                </div>
               </div>
             </section>
           )}
@@ -341,6 +353,81 @@ export function PlaybookForm() {
         </>
       )}
     </>
+  );
+}
+
+function PlaybookToTasksButton({
+  clients,
+  competitorUrl,
+  synthesis,
+}: {
+  clients: { id: number; name: string }[];
+  competitorUrl: string;
+  synthesis: string;
+}) {
+  const [, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [clientId, setClientId] = useState(
+    clients[0]?.id ? String(clients[0].id) : "",
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  if (clients.length === 0) {
+    return (
+      <span className="text-[10px] text-muted-foreground">
+        Add a client first to convert these to tasks
+      </span>
+    );
+  }
+
+  if (done) {
+    return (
+      <span className="text-[11px] text-emerald-300">{done}</span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={clientId}
+        onChange={(e) => setClientId(e.target.value)}
+        className="h-7 rounded-md border border-white/10 bg-card/60 px-2 text-[10px]"
+      >
+        {clients.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={pending || !clientId}
+        onClick={() => {
+          setPending(true);
+          setError(null);
+          startTransition(async () => {
+            const r = await playbookToTasks({
+              clientId: Number(clientId),
+              competitorUrl,
+              synthesis,
+            });
+            setPending(false);
+            if (r.ok) setDone(`✓ ${r.created} tasks added`);
+            else setError(r.error ?? "failed");
+          });
+        }}
+        className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2.5 py-1 text-[10px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50"
+      >
+        {pending ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <ListChecks className="size-3" />
+        )}
+        Convert to tasks
+      </button>
+      {error && <span className="text-[10px] text-rose-300">{error}</span>}
+    </div>
   );
 }
 
