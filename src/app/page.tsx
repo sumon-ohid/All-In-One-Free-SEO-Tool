@@ -21,7 +21,10 @@ import { PortfolioTrafficPanel } from "./portfolio-traffic-panel";
 import { PortfolioQuickWinsPanel } from "./portfolio-quick-wins-panel";
 import { MorningBriefing } from "./morning-briefing";
 import { WelcomeTour } from "./welcome-tour";
-import { tickScheduleRunner } from "@/lib/report-mailer";
+import {
+  tickPageMonitorRunner,
+  tickScheduleRunner,
+} from "@/lib/report-mailer";
 
 const priorityVariant: Record<
   string,
@@ -40,9 +43,10 @@ function greetingForHour(hour: number) {
 }
 
 export default async function DashboardPage() {
-  // Fire-and-forget schedule runner — has its own 5-minute cooldown so this
-  // is a no-op on most renders. Failures don't block the dashboard.
+  // Fire-and-forget schedulers — both have their own cooldowns so they're
+  // no-ops on most renders. Failures don't block the dashboard.
   tickScheduleRunner().catch(() => {});
+  tickPageMonitorRunner().catch(() => {});
 
   const [{ value: clientCount }] = await db
     .select({ value: count() })

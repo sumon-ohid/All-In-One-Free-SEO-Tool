@@ -1,9 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { clients, keywords, serpScans } from "@/db/schema";
+import { clients, keywordRankings, keywords, serpScans } from "@/db/schema";
 import { scanSerp } from "@/lib/serp-scanner";
 
 export type RunSerpScanResult =
@@ -49,6 +49,38 @@ export async function runSerpScan(
       totalResults: result.totalResults,
     })
     .returning({ id: serpScans.id });
+
+  // Mirror SERP feature flags onto the latest keyword_rankings row so the
+  // keyword table can render them inline next to the rank. If no ranking row
+  // exists yet (haven't checked rank), insert a stub so the flags persist.
+  if (result.ok) {
+    const [latest] = await db
+      .select({ id: keywordRankings.id })
+      .from(keywordRankings)
+      .where(eq(keywordRankings.keywordId, k.id))
+      .orderBy(desc(keywordRankings.checkedAt))
+      .limit(1);
+
+    const flags = {
+      hasAiOverview: result.aiOverviewPresent,
+      hasFeaturedSnippet: !!result.featuredSnippet,
+      hasLocalPack: result.localPackPresent,
+      paaCount: result.paaQuestions.length,
+    };
+    if (latest) {
+      await db
+        .update(keywordRankings)
+        .set(flags)
+        .where(eq(keywordRankings.id, latest.id));
+    } else {
+      await db.insert(keywordRankings).values({
+        keywordId: k.id,
+        position: null,
+        url: null,
+        ...flags,
+      });
+    }
+  }
 
   revalidatePath(`/keywords/c/${k.clientId}`);
   revalidatePath(`/keywords/${k.id}/serp`);

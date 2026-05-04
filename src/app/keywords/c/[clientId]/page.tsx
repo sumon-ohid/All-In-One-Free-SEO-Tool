@@ -40,6 +40,63 @@ function PositionBadge({ position }: { position: number | null | undefined }) {
   );
 }
 
+function SerpFeaturePills({
+  hasAiOverview,
+  hasFeaturedSnippet,
+  hasLocalPack,
+  paaCount,
+}: {
+  hasAiOverview: boolean;
+  hasFeaturedSnippet: boolean;
+  hasLocalPack: boolean;
+  paaCount: number;
+}) {
+  const any = hasAiOverview || hasFeaturedSnippet || hasLocalPack || paaCount > 0;
+  if (!any) {
+    return (
+      <span className="text-[11px] text-muted-foreground/50">
+        — run SERP scan
+      </span>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {hasAiOverview && (
+        <span
+          title="Google AI Overview present for this query"
+          className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-300 ring-1 ring-inset ring-violet-500/30"
+        >
+          AIO
+        </span>
+      )}
+      {hasFeaturedSnippet && (
+        <span
+          title="Featured snippet present"
+          className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+        >
+          FS
+        </span>
+      )}
+      {hasLocalPack && (
+        <span
+          title="Local 3-pack present"
+          className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300 ring-1 ring-inset ring-amber-500/30"
+        >
+          LP
+        </span>
+      )}
+      {paaCount > 0 && (
+        <span
+          title={`${paaCount} People-Also-Ask questions`}
+          className="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-300 ring-1 ring-inset ring-cyan-500/30"
+        >
+          PAA·{paaCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MiniSparkline({ values }: { values: (number | null)[] }) {
   const pts = values.filter((v): v is number => v !== null);
   if (pts.length < 2) return null;
@@ -123,7 +180,15 @@ export default async function PerClientKeywordsPage({
 
   const ranksByKeyword = new Map<
     number,
-    { position: number | null; url: string | null; checkedAt: Date }[]
+    {
+      position: number | null;
+      url: string | null;
+      checkedAt: Date;
+      hasAiOverview: boolean;
+      hasFeaturedSnippet: boolean;
+      hasLocalPack: boolean;
+      paaCount: number;
+    }[]
   >();
   for (const r of ranks) {
     const list = ranksByKeyword.get(r.keywordId) ?? [];
@@ -131,6 +196,10 @@ export default async function PerClientKeywordsPage({
       position: r.position,
       url: r.url,
       checkedAt: r.checkedAt,
+      hasAiOverview: !!r.hasAiOverview,
+      hasFeaturedSnippet: !!r.hasFeaturedSnippet,
+      hasLocalPack: !!r.hasLocalPack,
+      paaCount: r.paaCount ?? 0,
     });
     ranksByKeyword.set(r.keywordId, list);
   }
@@ -248,6 +317,7 @@ export default async function PerClientKeywordsPage({
                 <th className="px-5 py-3 text-left font-medium">Query</th>
                 <th className="px-3 py-3 text-left font-medium">Device</th>
                 <th className="px-3 py-3 text-center font-medium">Position</th>
+                <th className="px-3 py-3 text-left font-medium">SERP features</th>
                 <th className="px-3 py-3 text-left font-medium">Trend</th>
                 <th className="px-3 py-3 text-right font-medium">Actions</th>
               </tr>
@@ -274,6 +344,14 @@ export default async function PerClientKeywordsPage({
                     </td>
                     <td className="px-3 py-3 text-center">
                       <PositionBadge position={latest?.position ?? null} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <SerpFeaturePills
+                        hasAiOverview={!!latest?.hasAiOverview}
+                        hasFeaturedSnippet={!!latest?.hasFeaturedSnippet}
+                        hasLocalPack={!!latest?.hasLocalPack}
+                        paaCount={latest?.paaCount ?? 0}
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <MiniSparkline values={history.map((h) => h.position)} />

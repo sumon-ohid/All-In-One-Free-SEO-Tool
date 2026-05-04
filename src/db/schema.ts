@@ -654,6 +654,32 @@ export const keywordRankings = sqliteTable("keyword_rankings", {
   checkedAt: integer("checked_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+  // SERP feature flags captured at the same time as the rank — populated when
+  // the rank check is run via the SERP scanner (Playwright). Default 0 so
+  // rows from older browser-mode checks remain valid.
+  hasAiOverview: integer("has_ai_overview", { mode: "boolean" }).default(false),
+  hasFeaturedSnippet: integer("has_featured_snippet", {
+    mode: "boolean",
+  }).default(false),
+  hasLocalPack: integer("has_local_pack", { mode: "boolean" }).default(false),
+  paaCount: integer("paa_count").default(0),
+});
+
+export const botLogUploads = sqliteTable("bot_log_uploads", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  clientId: integer("client_id").references(() => clients.id, {
+    onDelete: "cascade",
+  }),
+  sourceName: text("source_name"),
+  rawByteSize: integer("raw_byte_size"),
+  lineCount: integer("line_count"),
+  /** JSON object: { "GPTBot": 412, "ClaudeBot": 117, … } */
+  botCounts: text("bot_counts", { mode: "json" }).$type<
+    Record<string, number>
+  >(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
 });
 
 export type Client = typeof clients.$inferSelect;
@@ -698,3 +724,5 @@ export type NewsFeed = typeof newsFeeds.$inferSelect;
 export type NewNewsFeed = typeof newsFeeds.$inferInsert;
 export type NewsItem = typeof newsItems.$inferSelect;
 export type NewNewsItem = typeof newsItems.$inferInsert;
+export type BotLogUpload = typeof botLogUploads.$inferSelect;
+export type NewBotLogUpload = typeof botLogUploads.$inferInsert;

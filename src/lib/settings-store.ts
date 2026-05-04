@@ -39,6 +39,7 @@ export type SettingKey =
   | "smtp.from_name"
   | "smtp.secure"
   | "schedule_runner.last_run"
+  | "page_monitor_runner.last_run"
   | "api.pagespeed"
   // Credit-saver mode: cap maxTokens, force terse system prompt, lower temp.
   // ON keeps token use under ~500/answer for cheap providers like Gemini /

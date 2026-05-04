@@ -67,6 +67,36 @@ export async function tickScheduleRunner(): Promise<void> {
   await runDueSchedules();
 }
 
+/**
+ * Daily page-monitor sweep — re-fetches every active monitored page, diffs
+ * against the prior snapshot, inserts to pageChanges, and fires any wired
+ * webhooks/automations on change. 24h cooldown.
+ */
+const PAGE_MONITOR_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+export async function tickPageMonitorRunner(): Promise<void> {
+  const lastRun = await getSetting<number>(
+    "page_monitor_runner.last_run",
+  ).catch(() => null);
+  if (
+    typeof lastRun === "number" &&
+    Date.now() - lastRun < PAGE_MONITOR_INTERVAL_MS
+  ) {
+    return;
+  }
+  const { setSetting } = await import("./settings-store");
+  await setSetting("page_monitor_runner.last_run", Date.now());
+
+  try {
+    const { checkAllMonitoredPages } = await import(
+      "@/app/monitor/actions"
+    );
+    await checkAllMonitoredPages();
+  } catch {
+    // Don't let scheduler failures break the dashboard render
+  }
+}
+
 export async function runDueSchedules(): Promise<{
   fired: number;
   errors: string[];
