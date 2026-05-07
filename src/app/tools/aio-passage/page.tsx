@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
 } from "./actions";
 import type { PassageScore } from "@/lib/aio-passage-scorer";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { RecentRuns } from "@/components/recent-runs";
 
 const SAMPLE = `# How INP affects SEO in 2026
 
@@ -35,6 +36,10 @@ export default function AioPassagePage() {
     null,
   );
   const [markdown, setMarkdown] = useState(SAMPLE);
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    if (state?.ok) setRefreshKey((k) => k + 1);
+  }, [state]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -97,6 +102,7 @@ export default function AioPassagePage() {
       )}
 
       {state?.ok && <Results passages={state.passages} />}
+      <RecentRuns toolId="aio-passage" refreshKey={refreshKey} />
     </div>
   );
 }

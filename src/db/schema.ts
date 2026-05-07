@@ -1420,3 +1420,41 @@ export const authorAuthorityRecords = sqliteTable("author_authority_records", {
 });
 export type AuthorAuthorityRecord = typeof authorAuthorityRecords.$inferSelect;
 export type NewAuthorAuthorityRecord = typeof authorAuthorityRecords.$inferInsert;
+
+/**
+ * Generic tool-run persistence.
+ *
+ * Many ad-hoc tools (CrUX origin, perf budget, facet trap, screenshot
+ * import, AIO passage, reputation abuse, Person schema) used to throw
+ * away their output as soon as the page reloaded. This table is the
+ * universal escape hatch: any tool can save its result here as JSON,
+ * the user can browse history, restore a prior run, pin one, or delete.
+ *
+ * Tools with their own purpose-built tables (knowledge panel snapshots,
+ * audits, content_briefs, etc.) still use those — this is for tools
+ * where a custom schema would be overkill.
+ */
+export const toolRuns = sqliteTable("tool_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  /** Optional — null for tools that aren't tied to a specific client. */
+  clientId: integer("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  /** Tool slug — matches the route segment, e.g. "crux-origin", "perf-budget". */
+  toolId: text("tool_id").notNull(),
+  /** Short human label so list views are readable without parsing JSON. */
+  label: text("label").notNull(),
+  /** The raw input the user submitted (URL, query, etc.) for re-running. */
+  inputJson: text("input_json", { mode: "json" }).$type<Record<string, unknown>>(),
+  /** The full structured output. Tools deserialize their own shape. */
+  resultJson: text("result_json", { mode: "json" }).$type<unknown>(),
+  /** User-pinned runs survive bulk-clear. */
+  pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+  /** Optional free-form notes the user can add. */
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+export type ToolRun = typeof toolRuns.$inferSelect;
+export type NewToolRun = typeof toolRuns.$inferInsert;

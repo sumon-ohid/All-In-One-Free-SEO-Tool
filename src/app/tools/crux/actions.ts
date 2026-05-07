@@ -7,6 +7,7 @@ import {
   type CruxResult,
   type CruxFormFactor,
 } from "@/lib/crux";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const schema = z.object({
   url: z
@@ -72,5 +73,12 @@ export async function runOriginSummary(
     url: parsed.data.url,
     formFactor: parsed.data.formFactor as CruxFormFactor,
   });
+  // Persist
+  await saveToolRun({
+    toolId: "crux-origin",
+    label: `${parsed.data.url} · ${parsed.data.formFactor}`,
+    input: { url: parsed.data.url, formFactor: parsed.data.formFactor },
+    result: { url: parsed.data.url, ...r },
+  }).catch(() => undefined);
   return { ok: true, url: parsed.data.url, ...r };
 }

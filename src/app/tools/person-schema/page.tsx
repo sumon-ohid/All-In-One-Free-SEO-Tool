@@ -1,9 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, User } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  Loader2,
+  Save,
+  User,
+} from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
+import { RecentRuns } from "@/components/recent-runs";
+import { savePersonSchema, type SaveState } from "./actions";
+import type { ToolRun } from "@/db/schema";
 
 type SocialLink = { id: string; url: string };
 
@@ -339,23 +349,99 @@ export default function PersonSchemaPage() {
 
       {jsonld && (
         <section className="glass-apple relative overflow-hidden rounded-2xl">
-          <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-4">
             <h2 className="text-base font-semibold">JSON-LD output</h2>
-            <button
-              type="button"
-              onClick={copy}
-              className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-500/15 px-3 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/25"
-            >
-              <Copy className="size-3" />
-              {copied ? "Copied" : "Copy <script>"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <SaveButton name={name} jsonld={jsonld} />
+              <button
+                type="button"
+                onClick={copy}
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-500/15 px-3 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/25"
+              >
+                <Copy className="size-3" />
+                {copied ? "Copied" : "Copy <script>"}
+              </button>
+            </div>
           </header>
           <pre className="overflow-x-auto p-5 font-mono text-[12px] leading-relaxed text-foreground/90">
             {fullEmbed}
           </pre>
         </section>
       )}
+
+      <PersonSchemaHistory
+        onRestore={(run) => {
+          const r = run.resultJson as { jsonld?: string } | null;
+          if (r?.jsonld) {
+            try {
+              const parsed = JSON.parse(r.jsonld) as Record<string, unknown>;
+              if (typeof parsed.name === "string") setName(parsed.name);
+              if (typeof parsed.jobTitle === "string") setJobTitle(parsed.jobTitle);
+              if (typeof parsed.description === "string") setBio(parsed.description);
+              if (typeof parsed.email === "string") setEmail(parsed.email);
+              if (typeof parsed.image === "string") setImageUrl(parsed.image);
+              if (typeof parsed.url === "string") setProfileUrl(parsed.url);
+              if (Array.isArray(parsed.sameAs)) {
+                setSocials(
+                  (parsed.sameAs as unknown[])
+                    .map((u) => String(u))
+                    .map((url) => ({ id: nextId(), url })),
+                );
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }}
+      />
     </div>
+  );
+}
+
+function SaveButton({ name, jsonld }: { name: string; jsonld: string }) {
+  const [state, formAction, pending] = useActionState<SaveState, FormData>(
+    savePersonSchema,
+    null,
+  );
+  const disabled = !name.trim() || !jsonld;
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="name" value={name} />
+      <input type="hidden" name="jsonld" value={jsonld} />
+      <button
+        type="submit"
+        disabled={disabled || pending}
+        className="inline-flex h-8 items-center gap-1 rounded-md bg-violet-500/15 px-3 text-xs font-medium text-violet-300 ring-1 ring-inset ring-violet-500/30 hover:bg-violet-500/25 disabled:opacity-50"
+      >
+        {pending ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : state?.ok ? (
+          <CheckCircle2 className="size-3" />
+        ) : (
+          <Save className="size-3" />
+        )}
+        {state?.ok ? "Saved" : "Save"}
+      </button>
+    </form>
+  );
+}
+
+function PersonSchemaHistory({
+  onRestore,
+}: {
+  onRestore: (run: ToolRun) => void;
+}) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setRefreshKey((k) => k + 1), 30_000);
+    return () => clearInterval(i);
+  }, []);
+  return (
+    <RecentRuns
+      toolId="person-schema"
+      onRestore={onRestore}
+      refreshKey={refreshKey}
+    />
   );
 }
 

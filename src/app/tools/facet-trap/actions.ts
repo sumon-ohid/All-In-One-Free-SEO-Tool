@@ -1,6 +1,7 @@
 "use server";
 
 import { detectFacetTraps, type FacetTrapReport } from "@/lib/facet-trap";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type FacetTrapState =
   | { ok: true; report: FacetTrapReport }
@@ -21,6 +22,12 @@ export async function runFacetTrap(
   }
   try {
     const report = await detectFacetTraps(parsed.toString(), 60);
+    await saveToolRun({
+      toolId: "facet-trap",
+      label: `${report.domain} · ${report.overall} risk · ${report.facetUrlCount} facet URLs`,
+      input: { url: parsed.toString() },
+      result: { ok: true, report },
+    }).catch(() => undefined);
     return { ok: true, report };
   } catch (e) {
     return {

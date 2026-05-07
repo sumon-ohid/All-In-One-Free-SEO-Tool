@@ -5,6 +5,7 @@ import {
   suggestRewriteHint,
   type PassageScore,
 } from "@/lib/aio-passage-scorer";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type AnalyzeState =
   | { ok: true; passages: PassageScore[] }
@@ -25,6 +26,15 @@ export async function analyzePassages(
         "Couldn't extract any passages — make sure paragraphs are separated by blank lines.",
     };
   }
+  const avg = Math.round(
+    passages.reduce((s, p) => s + p.score, 0) / passages.length,
+  );
+  await saveToolRun({
+    toolId: "aio-passage",
+    label: `${passages.length} passages · avg score ${avg}`,
+    input: { markdown: md.slice(0, 4000) },
+    result: { ok: true, passages },
+  }).catch(() => undefined);
   return { ok: true, passages };
 }
 

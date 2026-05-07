@@ -108,6 +108,7 @@ const groups: { title: string; items: Section[] }[] = [
       { href: "/automations", label: "Automations", icon: Workflow },
       { href: "/ai-visibility", label: "AI visibility", icon: Sparkles },
       { href: "/activity", label: "Activity log", icon: History },
+      { href: "/history", label: "Tool run history", icon: Save },
     ],
   },
   {

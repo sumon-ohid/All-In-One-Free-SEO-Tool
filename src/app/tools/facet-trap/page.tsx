@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Loader2, Network } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { runFacetTrap, type FacetTrapState } from "./actions";
+import { RecentRuns } from "@/components/recent-runs";
 
 const RISK_TONE = {
   low: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
@@ -17,6 +18,10 @@ export default function FacetTrapPage() {
     runFacetTrap,
     null,
   );
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    if (state?.ok) setRefreshKey((k) => k + 1);
+  }, [state]);
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <Link
@@ -179,6 +184,7 @@ export default function FacetTrapPage() {
           </section>
         </>
       )}
+      <RecentRuns toolId="facet-trap" refreshKey={refreshKey} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { callAIVision } from "@/lib/ai-vision";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type ParseResult =
   | { ok: true; text: string }
@@ -46,5 +47,16 @@ export async function parseScreenshot(input: {
         "No vision-capable AI provider responded. Configure OpenAI, Anthropic, Gemini, or OpenRouter in Settings.",
     };
   }
-  return { ok: true, text: r.trim() };
+  const text = r.trim();
+  await saveToolRun({
+    toolId: "screenshot-import",
+    label: `${input.parseType} · ${text.split("\n").length} lines extracted`,
+    // Don't store the raw image in the DB — keep just the parse type + size
+    input: {
+      parseType: input.parseType,
+      imageBytes: Math.round((base64.length * 3) / 4),
+    },
+    result: { ok: true, text },
+  }).catch(() => undefined);
+  return { ok: true, text };
 }

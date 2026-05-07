@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Gauge, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { runBudget, type BudgetState } from "./actions";
+import { RecentRuns } from "@/components/recent-runs";
 
 const DEFAULTS = {
   htmlKb: 100,
@@ -25,6 +26,10 @@ export default function PerfBudgetPage() {
     null,
   );
   const [budget, setBudget] = useState(DEFAULTS);
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    if (state?.ok) setRefreshKey((k) => k + 1);
+  }, [state]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -156,6 +161,7 @@ export default function PerfBudgetPage() {
           </ul>
         </section>
       )}
+      <RecentRuns toolId="perf-budget" refreshKey={refreshKey} />
     </div>
   );
 }

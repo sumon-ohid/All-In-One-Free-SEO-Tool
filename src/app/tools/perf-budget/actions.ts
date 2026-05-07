@@ -2,6 +2,7 @@
 
 import { scanCwv } from "@/lib/pagespeed";
 import { fetchCruxData } from "@/lib/crux";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type BudgetLine = {
   label: string;
@@ -129,5 +130,12 @@ export async function runBudget(
     };
   }
   const fails = lines.filter((l) => !l.passed).length;
-  return { ok: true, fails, lines };
+  const result: BudgetState = { ok: true, fails, lines };
+  await saveToolRun({
+    toolId: "perf-budget",
+    label: `${parsed.toString()} · ${fails} fail${fails === 1 ? "" : "s"}`,
+    input: { url: parsed.toString(), budgets },
+    result,
+  }).catch(() => undefined);
+  return result;
 }
