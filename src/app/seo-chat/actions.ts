@@ -2,6 +2,7 @@
 
 import { callAIVision, type VisionMessage } from "@/lib/ai-vision";
 import { findSkill, type SeoSkillId } from "@/lib/seo-skills";
+import { scanSerp } from "@/lib/serp-scanner";
 
 const SEO_SYSTEM_PROMPT = `You are an expert SEO consultant integrated into a self-hosted SEO toolkit. The user can ask anything SEO-related, including uploading images for image-SEO analysis (alt text suggestions, file-name advice, compression, EXIF, schema). Stay strictly on SEO and adjacent topics (content marketing, technical web performance, analytics, accessibility-as-it-affects-SEO). If asked about something off-topic, politely redirect.
 
@@ -72,11 +73,16 @@ export type SeoChatResult =
 const MAX_HISTORY = 10;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
+export type SeoChatResearchResult =
+  | { ok: true; reply: string; researchSnippet?: string }
+  | { ok: false; error: string };
+
 export async function seoChat(
   history: SeoChatMessage[],
   imageDataUrl?: string,
   skillId?: SeoSkillId,
-): Promise<SeoChatResult> {
+  research?: boolean,
+): Promise<SeoChatResearchResult> {
   if (history.length === 0 || history[history.length - 1].role !== "user") {
     return { ok: false, error: "No question to answer." };
   }
@@ -112,16 +118,52 @@ export async function seoChat(
   });
 
   const skill = findSkill(skillId ?? "general");
-  const fullSystem = skill.systemAddendum
+  let fullSystem = skill.systemAddendum
     ? `${SEO_SYSTEM_PROMPT}\n\n[Active focus: ${skill.name}]\n${skill.systemAddendum}`
     : SEO_SYSTEM_PROMPT;
+
+  let researchSnippet: string | undefined;
+  if (research) {
+    const lastUserMsg = trimmed[trimmed.length - 1]?.content ?? "";
+    // Heuristic — pull the first sentence as the search query, capped at 120 chars
+    const queryRaw = lastUserMsg
+      .split(/[.?!\n]/)[0]
+      .trim()
+      .slice(0, 120);
+    if (queryRaw.length >= 3) {
+      try {
+        const serp = await scanSerp({ query: queryRaw });
+        if (serp.ok) {
+          const top = serp.topResults.slice(0, 5).map((r, i) =>
+            `[${i + 1}] ${r.title}\n    ${r.url}\n    ${(r.snippet ?? "").slice(0, 200)}`,
+          );
+          const paa = serp.paaQuestions.slice(0, 5);
+          const aio = serp.aiOverviewText
+            ? `Google AI Overview answer (paraphrased):\n${serp.aiOverviewText.slice(0, 600)}`
+            : "";
+          researchSnippet = [
+            `LIVE RESEARCH for "${queryRaw}":`,
+            "",
+            top.join("\n\n"),
+            paa.length > 0 ? "\nPeople Also Ask:\n" + paa.map((q) => "- " + q).join("\n") : "",
+            aio,
+          ]
+            .filter(Boolean)
+            .join("\n");
+          fullSystem = `${fullSystem}\n\n[Live research mode is ON — current Google SERP data follows. Cite specific URLs in your reply when relevant.]\n${researchSnippet}`;
+        }
+      } catch {
+        // best-effort — proceed without research if SERP fetch failed
+      }
+    }
+  }
 
   const reply = await callAIVision({
     system: fullSystem,
     messages,
     maxTokens: 1500,
     temperature: 0.4,
-    timeoutMs: 45_000,
+    timeoutMs: 60_000,
     feature: "general",
   });
   if (!reply) {
@@ -131,5 +173,5 @@ export async function seoChat(
         "AI provider didn't respond. Configure a vision-capable provider (OpenAI, Anthropic, Gemini, or OpenRouter) in Settings → AI provider.",
     };
   }
-  return { ok: true, reply };
+  return { ok: true, reply, researchSnippet };
 }

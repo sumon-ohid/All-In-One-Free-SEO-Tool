@@ -1,12 +1,36 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { useActionState, useState, useTransition } from "react";
+import { Check, Copy, Loader2, Mail, Power, PowerOff } from "lucide-react";
 import type { WeeklyDigest } from "@/lib/weekly-digest";
+import {
+  sendDigest,
+  setSchedule,
+  type SendState,
+  type ScheduleState,
+} from "./actions";
 
-export function DigestView({ digest }: { digest: WeeklyDigest }) {
+export function DigestView({
+  digest,
+  initialEmail,
+  autoSendEnabled,
+  lastSentAt,
+}: {
+  digest: WeeklyDigest;
+  initialEmail: string;
+  autoSendEnabled: boolean;
+  lastSentAt: string | null;
+}) {
   const [tab, setTab] = useState<"summary" | "text" | "html">("summary");
   const [copied, setCopied] = useState<string | null>(null);
+  const [sendState, sendAction, sending] = useActionState<
+    SendState | null,
+    FormData
+  >(sendDigest, null);
+  const [schedState, schedAction, savingSched] = useActionState<
+    ScheduleState | null,
+    FormData
+  >(setSchedule, null);
 
   function copy(label: string, text: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -24,6 +48,110 @@ export function DigestView({ digest }: { digest: WeeklyDigest }) {
         <Stat label="Improved" value={digest.totals.clientsImproved.toString()} tone="emerald" />
         <Stat label="Dropped" value={digest.totals.clientsDropped.toString()} tone={digest.totals.clientsDropped > 0 ? "rose" : "emerald"} />
       </div>
+
+      <section className="glass-apple relative overflow-hidden rounded-2xl p-5 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Mail className="size-4 text-cyan-300" />
+          Send + auto-schedule
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Send this digest right now, or auto-send every Monday 09:00 UTC via
+          your configured SMTP. Configure SMTP in Settings → Email if you
+          haven&apos;t already.
+        </p>
+        <form action={sendAction} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+          <input
+            name="to"
+            type="email"
+            required
+            defaultValue={initialEmail}
+            placeholder="recipient@yourdomain.com"
+            className="h-9 w-full rounded-md border border-white/10 bg-card/60 px-3 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+          />
+          <input
+            name="subject"
+            defaultValue="Weekly SEO digest"
+            className="h-9 w-full rounded-md border border-white/10 bg-card/60 px-3 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="inline-flex h-9 items-center justify-center rounded-md bg-cyan-500/15 px-4 text-xs font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30 hover:bg-cyan-500/25 disabled:opacity-50"
+          >
+            {sending ? (
+              <>
+                <Loader2 className="mr-2 size-3 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 size-3" />
+                Send now
+              </>
+            )}
+          </button>
+        </form>
+        {sendState?.ok && (
+          <p className="text-xs text-emerald-300">
+            ✓ Sent. {lastSentAt ? `(last: ${lastSentAt})` : ""}
+          </p>
+        )}
+        {sendState && !sendState.ok && (
+          <p className="text-xs text-rose-300">{sendState.error}</p>
+        )}
+
+        <form
+          action={schedAction}
+          className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3"
+        >
+          <input type="hidden" name="email" defaultValue={initialEmail} />
+          <input
+            type="checkbox"
+            name="enabled"
+            id="digest-auto"
+            defaultChecked={autoSendEnabled}
+            className="size-4"
+          />
+          <label htmlFor="digest-auto" className="text-xs">
+            Auto-send every Monday 09:00 UTC to{" "}
+            <code className="rounded bg-white/5 px-1 py-0.5">
+              {initialEmail || "(set above first)"}
+            </code>
+          </label>
+          <button
+            type="submit"
+            disabled={savingSched}
+            className={`ml-auto inline-flex h-7 items-center rounded-md px-3 text-[11px] ring-1 ring-inset ${
+              autoSendEnabled
+                ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                : "bg-white/5 text-muted-foreground ring-white/10"
+            } hover:bg-white/10`}
+          >
+            {savingSched ? (
+              <>
+                <Loader2 className="mr-1 size-3 animate-spin" />
+                Saving…
+              </>
+            ) : autoSendEnabled ? (
+              <>
+                <Power className="mr-1 size-3" />
+                Enabled — save changes
+              </>
+            ) : (
+              <>
+                <PowerOff className="mr-1 size-3" />
+                Save schedule
+              </>
+            )}
+          </button>
+        </form>
+        {schedState?.ok && (
+          <p className="text-xs text-emerald-300">{schedState.message}</p>
+        )}
+        {schedState && !schedState.ok && (
+          <p className="text-xs text-rose-300">{schedState.error}</p>
+        )}
+      </section>
 
       {digest.algoOverlaps.length > 0 && (
         <section className="glass-apple relative overflow-hidden rounded-2xl p-5 space-y-2">

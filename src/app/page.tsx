@@ -27,6 +27,7 @@ import {
   tickScheduleRunner,
 } from "@/lib/report-mailer";
 import { tickDailyAgent } from "@/lib/daily-agent";
+import { tickWeeklyDigestRunner } from "@/lib/weekly-digest";
 
 const priorityVariant: Record<
   string,
@@ -50,6 +51,7 @@ export default async function DashboardPage() {
   tickScheduleRunner().catch(() => {});
   tickPageMonitorRunner().catch(() => {});
   tickDailyAgent().catch(() => {});
+  tickWeeklyDigestRunner().catch(() => {});
 
   const [{ value: clientCount }] = await db
     .select({ value: count() })

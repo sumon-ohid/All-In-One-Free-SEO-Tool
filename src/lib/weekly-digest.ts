@@ -309,3 +309,44 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+/**
+ * Auto-send tick. Fires from the dashboard alongside the other tick runners.
+ * Sends the weekly digest once per Monday 09:00 UTC if enabled in settings.
+ */
+export async function tickWeeklyDigestRunner(): Promise<void> {
+  const { getSetting, setSetting } = await import("./settings-store");
+  const enabled = await getSetting<boolean>("digest.auto_send_enabled");
+  if (!enabled) return;
+  const email = await getSetting<string>("digest.recipient_email");
+  if (!email) return;
+
+  const now = new Date();
+  if (now.getUTCDay() !== 1) return; // Monday
+  if (now.getUTCHours() < 9) return;
+
+  const thisMonday = new Date(now);
+  thisMonday.setUTCHours(9, 0, 0, 0);
+
+  const lastRunIso = await getSetting<string>("digest.last_auto_run_at");
+  if (lastRunIso) {
+    const lastRun = new Date(lastRunIso);
+    if (lastRun >= thisMonday) return;
+  }
+
+  await setSetting("digest.last_auto_run_at", thisMonday.toISOString());
+
+  try {
+    const digest = await buildWeeklyDigest();
+    const { sendMail } = await import("./mailer");
+    await sendMail({
+      to: [email],
+      subject: `Weekly SEO digest — ${digest.weekStart} → ${digest.weekEnd}`,
+      text: digest.textVersion,
+      html: digest.htmlVersion,
+    });
+    await setSetting("digest.last_sent_at", new Date().toISOString());
+  } catch {
+    // Retry next Monday if this failed
+  }
+}

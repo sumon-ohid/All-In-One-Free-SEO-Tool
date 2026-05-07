@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   Bot,
+  Globe,
   ImagePlus,
   Loader2,
   Send,
@@ -19,6 +20,7 @@ export function SeoChatUi() {
   const [input, setInput] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [skill, setSkill] = useState<SeoSkillId>("general");
+  const [research, setResearch] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -49,7 +51,7 @@ export function SeoChatUi() {
     if (fileRef.current) fileRef.current.value = "";
 
     startTransition(async () => {
-      const r = await seoChat(next, imageToSend ?? undefined, skill);
+      const r = await seoChat(next, imageToSend ?? undefined, skill, research);
       if (r.ok) {
         setMessages([...next, { role: "assistant", content: r.reply }]);
       } else {
@@ -256,6 +258,23 @@ export function SeoChatUi() {
           >
             <ImagePlus className="size-4" />
           </label>
+          <button
+            type="button"
+            onClick={() => setResearch((v) => !v)}
+            title={
+              research
+                ? "Live research ON — fetches a Google SERP before each answer"
+                : "Live research OFF — click to fetch live SERP data with each question"
+            }
+            className={`inline-flex h-9 items-center rounded-md px-3 text-xs font-medium ring-1 ring-inset transition-colors ${
+              research
+                ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+                : "bg-white/5 text-muted-foreground ring-white/10 hover:bg-white/10"
+            }`}
+          >
+            <Globe className="mr-1 size-3" />
+            {research ? "Research: ON" : "Research"}
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}

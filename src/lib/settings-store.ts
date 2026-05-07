@@ -78,7 +78,12 @@ export type SettingKey =
   // (with a "cap reached" error), so a runaway workflow can't drain credits.
   | "ai.monthly_cap_usd"
   // Per-day brand list used by branded-vs-non-branded GSC splitter.
-  | "brand.match_terms";
+  | "brand.match_terms"
+  // Weekly digest settings
+  | "digest.recipient_email"
+  | "digest.auto_send_enabled"
+  | "digest.last_sent_at"
+  | "digest.last_auto_run_at";
 
 export async function getSetting<T = unknown>(
   key: SettingKey,
