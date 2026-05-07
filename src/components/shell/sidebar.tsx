@@ -41,6 +41,7 @@ import {
   Flame,
   GitMerge,
   Magnet,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 
@@ -152,6 +153,8 @@ const groups: { title: string; items: Section[] }[] = [
       { href: "/tools/auto-link", label: "Auto-link suggester", icon: Link2 },
       { href: "/tools/redirects-manager", label: "Redirect manager", icon: GitMerge },
       { href: "/tools/canonical-audit", label: "Canonical audit", icon: GitMerge },
+      { href: "/tools/soft-404", label: "Soft 404 catcher", icon: ScanText },
+      { href: "/tools/youtube-audit", label: "YouTube SEO audit", icon: Video },
       { href: "/tools/trending", label: "Trending ideas", icon: Flame },
       { href: "/tools/traffic-drop", label: "Traffic-drop diagnostic", icon: TrendingDown },
       { href: "/tools/ai-schema", label: "AI schema generator", icon: Sparkles },

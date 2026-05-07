@@ -11,10 +11,11 @@
  * Powers Featured Snippet Hunter, PAA Tracker, and AIO presence over time.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "@/db/client";
 import { serpFeatureSnapshots, type NewSerpFeatureSnapshot } from "@/db/schema";
 import { scanSerp } from "./serp-scanner";
+import { logActivity } from "./activity";
 
 function normalizeDomain(input: string | null | undefined): string {
   if (!input) return "";
@@ -74,10 +75,79 @@ export async function captureSerpSnapshot(opts: {
     })),
   };
 
+  // Find the previous snapshot for this query so we can diff format shifts
+  const prev = await db
+    .select()
+    .from(serpFeatureSnapshots)
+    .where(eq(serpFeatureSnapshots.query, opts.query))
+    .orderBy(desc(serpFeatureSnapshots.capturedAt))
+    .limit(1);
+  const previousSnapshot = prev[0];
+
   const [inserted] = await db
     .insert(serpFeatureSnapshots)
     .values(row)
     .returning();
+
+  // Diff against the previous snapshot: any meaningful format shift logs
+  // an alert to the activity feed. Surfaces "AIO just appeared", "we lost
+  // the featured snippet", "intent flipped from listicles to product carousel".
+  if (previousSnapshot) {
+    const shifts: string[] = [];
+    if (!previousSnapshot.hasAio && row.hasAio) {
+      shifts.push("AI Overview appeared on this SERP");
+    } else if (previousSnapshot.hasAio && !row.hasAio) {
+      shifts.push("AI Overview disappeared from this SERP");
+    }
+    if (previousSnapshot.aioIncludesUs && !row.aioIncludesUs && row.hasAio) {
+      shifts.push("we were dropped from AI Overview citations");
+    } else if (!previousSnapshot.aioIncludesUs && row.aioIncludesUs) {
+      shifts.push("we are now cited in AI Overview");
+    }
+    if (
+      !previousSnapshot.hasFeaturedSnippet &&
+      row.hasFeaturedSnippet
+    ) {
+      shifts.push("a featured snippet appeared");
+    } else if (
+      previousSnapshot.hasFeaturedSnippet &&
+      !row.hasFeaturedSnippet
+    ) {
+      shifts.push("the featured snippet disappeared");
+    }
+    if (
+      previousSnapshot.featuredOwnedByUs &&
+      !row.featuredOwnedByUs &&
+      row.hasFeaturedSnippet
+    ) {
+      shifts.push("we lost the featured snippet to a competitor");
+    } else if (!previousSnapshot.featuredOwnedByUs && row.featuredOwnedByUs) {
+      shifts.push("we won the featured snippet");
+    }
+    // Top-3 domain churn — proxy for SERP-format / intent shift
+    const prevTop = (previousSnapshot.topResults ?? [])
+      .slice(0, 3)
+      .map((r) => r.domain);
+    const newTop = serp.topResults.slice(0, 3).map((r) => r.domain);
+    const overlap = prevTop.filter((d) => newTop.includes(d)).length;
+    if (prevTop.length === 3 && newTop.length === 3 && overlap === 0) {
+      shifts.push(
+        "top 3 domains turned over completely — possible intent shift",
+      );
+    }
+
+    if (shifts.length > 0) {
+      await logActivity({
+        kind: "rank.changed",
+        message: `SERP shift on "${opts.query}": ${shifts.join("; ")}`,
+        level: shifts.some((s) => s.includes("lost") || s.includes("dropped"))
+          ? "warning"
+          : "info",
+        entityType: "serp_features",
+        entityId: inserted?.id,
+      });
+    }
+  }
 
   return { ok: true, snapshotId: inserted?.id };
 }

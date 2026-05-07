@@ -12,6 +12,7 @@ import {
   Edit3,
 } from "lucide-react";
 import { saveIssueNotes, toggleResolved } from "../actions";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 type IssueRow = {
   id: number;
@@ -182,9 +183,10 @@ export function ChecklistView({
       </div>
 
       {audit.summary && (
-        <section className="glass-apple relative overflow-hidden rounded-2xl p-5">
-          <h3 className="text-sm font-semibold mb-2">Executive summary</h3>
+        <section className="glass-apple relative overflow-hidden rounded-2xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold">Executive summary</h3>
           <p className="text-sm leading-relaxed">{audit.summary}</p>
+          <AiDisclaimer />
         </section>
       )}
 

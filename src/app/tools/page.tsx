@@ -210,6 +210,22 @@ const tools = [
     accent: "violet",
   },
   {
+    href: "/tools/youtube-audit",
+    icon: Video,
+    title: "YouTube SEO audit",
+    description:
+      "Paste any YouTube URL → 14-point checklist (title, description, chapters, hashtags, tags, captions, thumbnail, like ratio, freshness) + AI fix steps. Free — uses oEmbed + watch-page scrape.",
+    accent: "rose",
+  },
+  {
+    href: "/tools/soft-404",
+    icon: ScanText,
+    title: "Soft 404 catcher",
+    description:
+      "Crawl + flag pages that return 200 but smell like 404s — thin content, '404' / 'page not found' text patterns, generic error titles. Silent indexation killers.",
+    accent: "rose",
+  },
+  {
     href: "/tools/canonical-audit",
     icon: GitMerge,
     title: "Canonical conflict detector",

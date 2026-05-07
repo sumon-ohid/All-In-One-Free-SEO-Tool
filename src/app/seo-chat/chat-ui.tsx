@@ -353,13 +353,16 @@ export function SeoChatUi() {
           </button>
         </form>
 
-        <div className="border-t border-white/[0.04] bg-white/[0.01] px-3 py-1.5 text-[10px] text-muted-foreground flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
+        <div className="border-t border-white/[0.04] bg-white/[0.01] px-3 py-1.5 text-[10px] text-muted-foreground flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 shrink-0">
             <Zap className="size-3" />
-            ~{estimateTokens(input, length, research)} tok est.
+            ~{estimateTokens(input, length, research)} tok
           </span>
-          <span>
-            {length === "short" ? "≈ $0.0001-$0.001 / answer" : "≈ $0.001-$0.01 / answer"}
+          <span className="italic text-muted-foreground/70 truncate">
+            AI can make mistakes — verify before applying
+          </span>
+          <span className="shrink-0">
+            {length === "short" ? "≈ $0.0001-$0.001" : "≈ $0.001-$0.01"}
             {" · "}
             <a href="/settings/ai-usage" className="hover:text-foreground hover:underline">
               usage

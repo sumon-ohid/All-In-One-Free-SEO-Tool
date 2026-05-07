@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Check, Copy, FileText, Loader2 } from "lucide-react";
 import { runBrief, type BriefState } from "./actions";
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 
 export function BriefForm() {
   const [state, formAction, pending] = useActionState<BriefState | null, FormData>(
@@ -105,6 +106,9 @@ export function BriefForm() {
               <pre className="max-h-[600px] overflow-auto whitespace-pre-wrap p-5 font-sans text-sm leading-relaxed">
                 {state.result.brief}
               </pre>
+              <div className="border-t border-white/[0.06] px-5 py-3">
+                <AiDisclaimer />
+              </div>
             </section>
           )}
 
