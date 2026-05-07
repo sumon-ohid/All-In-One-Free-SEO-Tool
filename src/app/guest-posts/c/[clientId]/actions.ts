@@ -37,6 +37,8 @@ export async function generateGuestPost(
   const supportingKeywords = String(formData.get("supportingKeywords") ?? "").trim();
   const authorName = String(formData.get("authorName") ?? "").trim();
   const authorBio = String(formData.get("authorBio") ?? "").trim();
+  const aiProvider = String(formData.get("aiProvider") ?? "").trim();
+  const aiModel = String(formData.get("aiModel") ?? "").trim();
 
   if (!Number.isFinite(clientId) || clientId <= 0)
     return { ok: false, error: "Bad client id." };
@@ -66,6 +68,10 @@ export async function generateGuestPost(
     supportingKeywords: supportingKeywords || undefined,
     authorName: authorName || undefined,
     authorBio: authorBio || undefined,
+    providerOverride: aiProvider
+      ? (aiProvider as import("@/lib/api-keys").ActiveProvider)
+      : undefined,
+    modelOverride: aiModel || undefined,
   });
   if (!result.ok) return { ok: false, error: result.error };
 

@@ -31,6 +31,10 @@ import {
 import type { BulkBlogTopic, SiteBlogContext } from "@/lib/bulk-blog-planner";
 import type { ContentBrief } from "@/db/schema";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import {
+  AiModelPicker,
+  type ModelSelection,
+} from "@/components/ai-model-picker";
 
 type Tab = "wizard" | "drafts";
 
@@ -430,6 +434,7 @@ function TopicCard({
         </div>
         <input type="hidden" name="tone" value="professional" />
         <input type="hidden" name="audienceLevel" value="intermediate" />
+        <BulkModelPickerWithHidden />
 
         <button
           type="submit"
@@ -724,4 +729,23 @@ function mdToBasicHtml(md: string): string {
 ${html}
 </body>
 </html>`;
+}
+
+/**
+ * Picker that mirrors its selection into hidden form inputs so the form
+ * action receives the chosen provider + model alongside the rest of the
+ * topic data. Auto-hides when the user has ≤1 providers configured.
+ */
+function BulkModelPickerWithHidden() {
+  const [sel, setSel] = useState<ModelSelection>({
+    provider: undefined,
+    model: undefined,
+  });
+  return (
+    <>
+      <input type="hidden" name="aiProvider" value={sel.provider ?? ""} />
+      <input type="hidden" name="aiModel" value={sel.model ?? ""} />
+      <AiModelPicker selection={sel} onChange={setSel} size="sm" />
+    </>
+  );
 }

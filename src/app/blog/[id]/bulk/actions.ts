@@ -110,6 +110,8 @@ export async function generateAndSaveDraft(
   )
     ? wordCountRaw
     : 1200) as 800 | 1200 | 1500 | 2000;
+  const aiProvider = String(formData.get("aiProvider") ?? "").trim();
+  const aiModel = String(formData.get("aiModel") ?? "").trim();
 
   if (!Number.isFinite(clientId) || clientId <= 0)
     return { ok: false, error: "Bad client id." };
@@ -141,6 +143,10 @@ export async function generateAndSaveDraft(
     notes: [`Suggested H1: ${title}`, angle ? `Angle: ${angle}` : ""]
       .filter(Boolean)
       .join("\n"),
+    providerOverride: aiProvider
+      ? (aiProvider as import("@/lib/api-keys").ActiveProvider)
+      : undefined,
+    modelOverride: aiModel || undefined,
   });
   if (!result.ok) return { ok: false, error: result.error };
 

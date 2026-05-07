@@ -41,6 +41,7 @@ export async function generateBlogPost(opts: {
   audienceLevel?: BlogWriteRequest["audienceLevel"];
   wordCount?: BlogWriteRequest["wordCount"];
   notes?: string;
+  modelChoice?: { provider?: string; model?: string };
 }): Promise<GenerateBlogResult> {
   const parsed = inputSchema.safeParse(opts);
   if (!parsed.success) {
@@ -85,6 +86,10 @@ export async function generateBlogPost(opts: {
     wordCount: parsed.data.wordCount as 800 | 1200 | 1500 | 2000,
     notes: parsed.data.notes,
     topQueries,
+    providerOverride: opts.modelChoice?.provider as
+      | import("@/lib/api-keys").ActiveProvider
+      | undefined,
+    modelOverride: opts.modelChoice?.model,
   });
 
   return result;

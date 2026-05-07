@@ -21,6 +21,10 @@ import {
 } from "./actions";
 import { AiFeedback } from "@/components/ai-feedback";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import {
+  AiModelPicker,
+  type ModelSelection,
+} from "@/components/ai-model-picker";
 
 type Suggestion = {
   source: "quick_win" | "niche";
@@ -46,6 +50,10 @@ export function BlogWriterForm({
     useState<"beginner" | "intermediate" | "expert">("intermediate");
   const [wordCount, setWordCount] = useState<800 | 1200 | 1500 | 2000>(1200);
 
+  const [modelSel, setModelSel] = useState<ModelSelection>({
+    provider: undefined,
+    model: undefined,
+  });
   const [pending, startTransition] = useTransition();
   const [savePending, startSave] = useTransition();
   const [plagiarismPending, startPlagiarism] = useTransition();
@@ -94,6 +102,7 @@ export function BlogWriterForm({
         audienceLevel,
         wordCount,
         notes,
+        modelChoice: { provider: modelSel.provider, model: modelSel.model },
       });
       if (!r.ok) {
         setResult({ tone: "error", text: r.error });
@@ -316,7 +325,7 @@ export function BlogWriterForm({
             />
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <Button onClick={generate} disabled={pending || !targetKeyword.trim()}>
               {pending ? (
                 <>
@@ -330,6 +339,7 @@ export function BlogWriterForm({
                 </>
               )}
             </Button>
+            <AiModelPicker selection={modelSel} onChange={setModelSel} size="sm" />
             {result?.tone === "error" && (
               <span className="inline-flex items-center gap-1 text-xs text-rose-300">
                 <AlertCircle className="size-3.5" />

@@ -22,6 +22,10 @@ export type BlogWriteRequest = {
 
   /** Optional real-world signals from GSC to ground the post */
   topQueries?: GscKeyword[];
+
+  /** Per-call provider override (when user picks a non-default model). */
+  providerOverride?: import("./api-keys").ActiveProvider;
+  modelOverride?: string;
 };
 
 export type BlogWriteResult =
@@ -155,6 +159,8 @@ export async function writeBlogPost(
     feature: "blog_draft",
     clientId: req.clientId ?? null,
     ignoreCreditSaver: true,
+    providerOverride: req.providerOverride,
+    modelOverride: req.modelOverride,
   });
 
   if (!result) {

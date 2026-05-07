@@ -52,6 +52,9 @@ export type GuestPostInput = {
   authorName?: string;
   /** Author short bio for the footer block. */
   authorBio?: string;
+  /** Per-call provider override. */
+  providerOverride?: import("./api-keys").ActiveProvider;
+  modelOverride?: string;
 };
 
 export type GuestPostResult =
@@ -107,6 +110,8 @@ export async function writeGuestPost(
     feature: "blog_draft",
     timeoutMs: 120_000,
     ignoreCreditSaver: true, // long-form needs the room
+    providerOverride: input.providerOverride,
+    modelOverride: input.modelOverride,
   });
   if (!text)
     return {

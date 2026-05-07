@@ -30,6 +30,10 @@ import {
 import type { GuestPostSite } from "@/lib/guest-post-sites";
 import type { GuestPostDraft } from "@/db/schema";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import {
+  AiModelPicker,
+  type ModelSelection,
+} from "@/components/ai-model-picker";
 
 export function GuestPostComposer({
   clientId,
@@ -107,6 +111,10 @@ function NewDraft({
   const [siteId, setSiteId] = useState<string>(
     recommendedSites[0]?.id ?? otherSites[0]?.id ?? "medium",
   );
+  const [modelSel, setModelSel] = useState<ModelSelection>({
+    provider: undefined,
+    model: undefined,
+  });
   const allSites = [...recommendedSites, ...otherSites];
   const selectedSite = allSites.find((s) => s.id === siteId);
 
@@ -248,23 +256,28 @@ function NewDraft({
           </label>
         </div>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex h-10 items-center rounded-md bg-amber-500/15 px-5 text-sm font-medium text-amber-300 ring-1 ring-inset ring-amber-500/30 hover:bg-amber-500/25 disabled:opacity-50"
-        >
-          {pending ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              Writing… (~30-90s)
-            </>
-          ) : (
-            <>
-              <Wand2 className="mr-2 size-4" />
-              Write guest post
-            </>
-          )}
-        </button>
+        <input type="hidden" name="aiProvider" value={modelSel.provider ?? ""} />
+        <input type="hidden" name="aiModel" value={modelSel.model ?? ""} />
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={pending}
+            className="inline-flex h-10 items-center rounded-md bg-amber-500/15 px-5 text-sm font-medium text-amber-300 ring-1 ring-inset ring-amber-500/30 hover:bg-amber-500/25 disabled:opacity-50"
+          >
+            {pending ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Writing… (~30-90s)
+              </>
+            ) : (
+              <>
+                <Wand2 className="mr-2 size-4" />
+                Write guest post
+              </>
+            )}
+          </button>
+          <AiModelPicker selection={modelSel} onChange={setModelSel} size="sm" />
+        </div>
         <p className="text-[11px] text-muted-foreground">
           The AI matches the platform&apos;s house style, varies sentence
           length, includes citations, and limits target-keyword density.
