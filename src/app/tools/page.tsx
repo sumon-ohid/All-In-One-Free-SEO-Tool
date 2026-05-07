@@ -15,6 +15,7 @@ import {
   GitMerge,
   Globe,
   Image as ImageIcon,
+  Layers,
   Link as LinkIcon,
   Link2,
   ListChecks,
@@ -86,6 +87,22 @@ const tools = [
     title: "Outreach personalizer",
     description:
       "Paste prospect URL + your generic template. AI mines their site for recent posts and topical signals, rewrites your opener with a specific reference. 2% → 15% reply rates.",
+    accent: "rose",
+  },
+  {
+    href: "/tools/programmatic-seo",
+    icon: Layers,
+    title: "Programmatic SEO toolkit",
+    description:
+      "CSV + four templates → 100s-1000s of landing pages with sitemap + interlinking. Ideal for city × service combos and SaaS comparison pages.",
+    accent: "violet",
+  },
+  {
+    href: "/tools/og-image",
+    icon: ImageIcon,
+    title: "OG image generator",
+    description:
+      "1200×630 PNG cover image from a title + brand. 4 templates rendered in headless Chrome. No paid AI image API.",
     accent: "rose",
   },
   {

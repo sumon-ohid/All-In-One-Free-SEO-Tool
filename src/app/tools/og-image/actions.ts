@@ -1,0 +1,33 @@
+"use server";
+
+import { generateOgImage, type OgTemplate } from "@/lib/og-image";
+
+export type OgState =
+  | { ok: true; dataUrl: string }
+  | { ok: false; error: string };
+
+export async function runOgImage(
+  _prev: OgState | null,
+  formData: FormData,
+): Promise<OgState> {
+  const title = String(formData.get("title") ?? "").trim();
+  const subtitle = String(formData.get("subtitle") ?? "").trim();
+  const brand = String(formData.get("brand") ?? "").trim();
+  const brandColor = String(formData.get("brandColor") ?? "#7c3aed").trim();
+  const template = String(formData.get("template") ?? "gradient") as OgTemplate;
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim() || undefined;
+
+  if (!title) return { ok: false, error: "Title required." };
+
+  const r = await generateOgImage({
+    title,
+    subtitle: subtitle || undefined,
+    brand: brand || undefined,
+    brandColor,
+    template,
+    imageUrl,
+  });
+
+  if (!r.ok || !r.dataUrl) return { ok: false, error: r.error ?? "Generation failed" };
+  return { ok: true, dataUrl: r.dataUrl };
+}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Check, Copy, Link2, Loader2 } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
+import { Check, Copy, Link2, Loader2, Wand2 } from "lucide-react";
 import { runAutoLink, type AutoLinkState } from "./actions";
 
 export function AutoLinkForm() {
@@ -10,12 +10,46 @@ export function AutoLinkForm() {
     FormData
   >(runAutoLink, null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [allCopied, setAllCopied] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   function copyAsHtml(idx: number, anchor: string, target: string) {
     const html = `<a href="${target}">${anchor}</a>`;
     navigator.clipboard.writeText(html).then(() => {
       setCopiedIdx(idx);
       setTimeout(() => setCopiedIdx(null), 1500);
+    });
+  }
+
+  function applyAllAndCopy() {
+    if (!state?.ok) return;
+    const original = contentRef.current?.value ?? "";
+    let result = original;
+    // Apply each suggestion exactly once. Track the offsets we've already
+    // wrapped to avoid double-wrapping.
+    const applied: { from: number; to: number }[] = [];
+    for (const s of state.suggestions) {
+      const idx = result.toLowerCase().indexOf(s.anchor.toLowerCase());
+      if (idx === -1) continue;
+      // Skip if this position overlaps an already-wrapped region
+      if (applied.some((a) => idx >= a.from && idx <= a.to)) continue;
+      const matched = result.slice(idx, idx + s.anchor.length);
+      const replacement = `<a href="${s.targetUrl}">${matched}</a>`;
+      result =
+        result.slice(0, idx) + replacement + result.slice(idx + s.anchor.length);
+      const newTo = idx + replacement.length;
+      // Shift later applied bounds
+      for (const a of applied) {
+        if (a.from > idx) {
+          a.from += replacement.length - s.anchor.length;
+          a.to += replacement.length - s.anchor.length;
+        }
+      }
+      applied.push({ from: idx, to: newTo });
+    }
+    navigator.clipboard.writeText(result).then(() => {
+      setAllCopied(true);
+      setTimeout(() => setAllCopied(false), 1500);
     });
   }
 
@@ -28,6 +62,7 @@ export function AutoLinkForm() {
         <label className="space-y-1 text-xs">
           <span className="text-muted-foreground">Content</span>
           <textarea
+            ref={contentRef}
             name="content"
             required
             rows={8}
@@ -83,11 +118,28 @@ export function AutoLinkForm() {
 
       {state?.ok && state.suggestions.length > 0 && (
         <section className="glass-apple relative overflow-hidden rounded-2xl">
-          <header className="border-b border-white/[0.06] px-5 py-3">
+          <header className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3">
             <h3 className="text-sm font-semibold">
               {state.suggestions.length} link suggestion
               {state.suggestions.length === 1 ? "" : "s"}
             </h3>
+            <button
+              type="button"
+              onClick={applyAllAndCopy}
+              className="inline-flex h-8 items-center rounded-md bg-emerald-500/15 px-3 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/25"
+            >
+              {allCopied ? (
+                <>
+                  <Check className="mr-1 size-3 text-emerald-300" />
+                  Copied content
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-1 size-3" />
+                  Apply all + copy content
+                </>
+              )}
+            </button>
           </header>
           <ul className="divide-y divide-white/[0.05]">
             {state.suggestions.map((s, i) => (

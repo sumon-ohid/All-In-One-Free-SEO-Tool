@@ -55,6 +55,7 @@ const groups: { title: string; items: Section[] }[] = [
     title: "Workspace",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/morning", label: "Morning briefing", icon: Activity },
       { href: "/grader", label: "Instant audit", icon: Sparkles },
       { href: "/import", label: "Import screenshot", icon: ScanText },
       { href: "/capture", label: "Universal capture", icon: Magnet },
@@ -131,6 +132,8 @@ const groups: { title: string; items: Section[] }[] = [
       { href: "/tools/pagerank", label: "PageRank simulator", icon: Network },
       { href: "/tools/intent-classifier", label: "Intent classifier", icon: Sparkles },
       { href: "/tools/disavow", label: "Disavow generator", icon: Sparkles },
+      { href: "/tools/programmatic-seo", label: "Programmatic SEO", icon: Layers },
+      { href: "/tools/og-image", label: "OG image generator", icon: ImageIcon },
       { href: "/tools/serp-features", label: "SERP feature tracker", icon: Sparkles },
       { href: "/tools/branded-split", label: "Branded GSC split", icon: GitMerge },
       { href: "/tools/robots-history", label: "robots.txt history", icon: History },

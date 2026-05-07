@@ -1,8 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Check, Copy, GitMerge, Loader2 } from "lucide-react";
-import { runMapping, type MigrationState } from "./actions";
+import { useActionState, useState, useTransition } from "react";
+import { Check, Copy, GitMerge, Loader2, Upload } from "lucide-react";
+import {
+  runMapping,
+  importToRedirectRules,
+  type MigrationState,
+} from "./actions";
 
 export function MigrationForm() {
   const [state, formAction, pending] = useActionState<
@@ -11,6 +15,33 @@ export function MigrationForm() {
   >(runMapping, null);
   const [tab, setTab] = useState<"nginx" | "apache" | "nextjs" | "table">("nginx");
   const [copied, setCopied] = useState<string | null>(null);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importing, startImport] = useTransition();
+
+  function importToManager() {
+    setImportMsg(null);
+    const oldUrls = (
+      document.querySelector('textarea[name="oldUrls"]') as HTMLTextAreaElement
+    )?.value;
+    const newUrls = (
+      document.querySelector('textarea[name="newUrls"]') as HTMLTextAreaElement
+    )?.value;
+    if (!oldUrls || !newUrls) {
+      setImportMsg("Fill both lists first.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("oldUrls", oldUrls);
+    fd.set("newUrls", newUrls);
+    startImport(async () => {
+      const r = await importToRedirectRules(null, fd);
+      if (r.ok) {
+        setImportMsg(`✓ Imported ${r.inserted} high-confidence rules into the redirect manager.`);
+      } else {
+        setImportMsg(r.error);
+      }
+    });
+  }
 
   function copy(label: string, text: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -76,6 +107,30 @@ export function MigrationForm() {
 
       {state?.ok && (
         <>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={importToManager}
+              disabled={importing}
+              className="inline-flex h-9 items-center rounded-md bg-emerald-500/15 px-4 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="mr-2 size-3 animate-spin" />
+                  Importing…
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 size-3" />
+                  Import high-confidence to redirect manager
+                </>
+              )}
+            </button>
+            {importMsg && (
+              <span className="text-xs text-muted-foreground">{importMsg}</span>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat label="Old URLs" value={state.map.summary.total.toString()} />
             <Stat label="High confidence" value={state.map.summary.matched.toString()} hint="≥85%" tone="emerald" />
