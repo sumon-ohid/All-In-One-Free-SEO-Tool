@@ -30,7 +30,7 @@ import {
   difficultyTone,
   type Difficulty,
 } from "@/lib/backlink-difficulty";
-import { CATEGORY_LABELS } from "@/lib/seo-resources-loader";
+import { CATEGORY_LABELS } from "@/lib/seo-resources-categories";
 import type { ScoredProspect } from "@/lib/backlink-niche-matcher";
 
 type TrackedRow = {

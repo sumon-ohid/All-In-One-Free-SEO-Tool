@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { clients, guestPostDrafts } from "@/db/schema";
 import {
@@ -191,5 +191,3 @@ export async function listDraftsForClient(clientId: number) {
     .orderBy(desc(guestPostDrafts.createdAt));
 }
 
-// Used elsewhere — silence lint warning if unused at import site
-export const _ = and;

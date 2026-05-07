@@ -7,11 +7,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   Compass,
-  ExternalLink,
   Link2,
-  Send,
   Sparkles,
-  XCircle,
 } from "lucide-react";
 import { db } from "@/db/client";
 import {
@@ -20,10 +17,7 @@ import {
   seoResources,
 } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
-import {
-  CATEGORY_LABELS,
-  ensureSeoResourcesSeeded,
-} from "@/lib/seo-resources-loader";
+import { ensureSeoResourcesSeeded } from "@/lib/seo-resources-loader";
 import {
   scoreNicheProspects,
   type ScoredProspect,
@@ -192,5 +186,3 @@ function Tone({
   );
 }
 
-// Re-exports for the hub child component
-export { CATEGORY_LABELS, ExternalLink, Send, XCircle };
