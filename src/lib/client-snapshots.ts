@@ -11,7 +11,7 @@
  * can pull (newest, baseline) and render delta charts trivially.
  */
 
-import { and, count, desc, eq, gte } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   audits,
@@ -199,25 +199,37 @@ async function rankAggregate(
     .where(eq(keywords.clientId, clientId));
   if (kwRows.length === 0) return { avgRankX100: null, top10Count: null };
 
+  // Single batched query — pull all rankings for these keywords, then
+  // pick the latest per keyword in memory. Replaces N+1 (one SELECT
+  // per keyword) with one SELECT for the whole set.
+  const keywordIds = kwRows.map((k) => k.id);
+  const allRanks = await db
+    .select({
+      keywordId: keywordRankings.keywordId,
+      position: keywordRankings.position,
+      checkedAt: keywordRankings.checkedAt,
+    })
+    .from(keywordRankings)
+    .where(inArray(keywordRankings.keywordId, keywordIds))
+    .orderBy(desc(keywordRankings.checkedAt));
+
+  const latestByKw = new Map<number, number>();
+  for (const r of allRanks) {
+    if (latestByKw.has(r.keywordId)) continue;
+    if (r.position != null) latestByKw.set(r.keywordId, r.position);
+  }
+
   let sum = 0;
-  let count = 0;
+  let n = 0;
   let top10 = 0;
-  for (const k of kwRows) {
-    const [latest] = await db
-      .select({ position: keywordRankings.position })
-      .from(keywordRankings)
-      .where(eq(keywordRankings.keywordId, k.id))
-      .orderBy(desc(keywordRankings.checkedAt))
-      .limit(1);
-    if (latest?.position) {
-      sum += latest.position;
-      count++;
-      if (latest.position <= 10) top10++;
-    }
+  for (const pos of latestByKw.values()) {
+    sum += pos;
+    n++;
+    if (pos <= 10) top10++;
   }
   return {
-    avgRankX100: count > 0 ? Math.round((sum / count) * 100) : null,
-    top10Count: count > 0 ? top10 : null,
+    avgRankX100: n > 0 ? Math.round((sum / n) * 100) : null,
+    top10Count: n > 0 ? top10 : null,
   };
 }
 
@@ -277,16 +289,36 @@ export async function snapshotStaleClients(): Promise<{
 }> {
   const all = await db.select({ id: clients.id }).from(clients);
   let taken = 0;
-  for (const c of all) {
-    const [latest] = await db
-      .select({ capturedAt: clientMetricSnapshots.capturedAt })
+
+  // Batched: fetch the most-recent snapshot per client in ONE query
+  // rather than O(clients) SELECTs. Then build a Map for O(1) lookup.
+  const lastByClient = new Map<number, Date>();
+  if (all.length > 0) {
+    const recentSnaps = await db
+      .select({
+        clientId: clientMetricSnapshots.clientId,
+        capturedAt: clientMetricSnapshots.capturedAt,
+      })
       .from(clientMetricSnapshots)
-      .where(eq(clientMetricSnapshots.clientId, c.id))
-      .orderBy(desc(clientMetricSnapshots.capturedAt))
-      .limit(1);
+      .where(
+        inArray(
+          clientMetricSnapshots.clientId,
+          all.map((c) => c.id),
+        ),
+      )
+      .orderBy(desc(clientMetricSnapshots.capturedAt));
+    for (const s of recentSnaps) {
+      if (!lastByClient.has(s.clientId)) {
+        lastByClient.set(s.clientId, s.capturedAt);
+      }
+    }
+  }
+
+  for (const c of all) {
+    const latest = lastByClient.get(c.id) ?? null;
     if (
       latest &&
-      Date.now() - latest.capturedAt.getTime() < 6.5 * 24 * 60 * 60 * 1000
+      Date.now() - latest.getTime() < 6.5 * 24 * 60 * 60 * 1000
     ) {
       continue;
     }

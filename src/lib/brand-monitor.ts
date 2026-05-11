@@ -15,7 +15,7 @@
  * `monitorBrand()` directly.
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { brandMentions, type NewBrandMention } from "@/db/schema";
 
@@ -55,23 +55,32 @@ export async function monitorBrand(opts: {
     }
   }
 
-  // Insert with dedupe on (clientId, source, externalId)
+  // Batched dedupe: pull all existing (clientId, source, externalId)
+  // tuples in a single query, then filter in memory before insert.
+  // Replaces the N+1 (one SELECT per item) with one bulk SELECT.
   let added = 0;
-  for (const m of collected) {
-    const [existing] = await db
-      .select({ id: brandMentions.id })
-      .from(brandMentions)
-      .where(
-        and(
-          eq(brandMentions.clientId, m.clientId),
-          eq(brandMentions.source, m.source),
-          eq(brandMentions.externalId, m.externalId),
-        ),
-      )
-      .limit(1);
-    if (existing) continue;
-    await db.insert(brandMentions).values(m);
-    added++;
+  if (collected.length > 0) {
+    const externalIds = collected.map((m) => m.externalId).filter(Boolean);
+    const existing = externalIds.length
+      ? await db
+          .select({
+            clientId: brandMentions.clientId,
+            source: brandMentions.source,
+            externalId: brandMentions.externalId,
+          })
+          .from(brandMentions)
+          .where(inArray(brandMentions.externalId, externalIds))
+      : [];
+    const seen = new Set(
+      existing.map((e) => `${e.clientId}::${e.source}::${e.externalId}`),
+    );
+    const toInsert = collected.filter(
+      (m) => !seen.has(`${m.clientId}::${m.source}::${m.externalId}`),
+    );
+    if (toInsert.length > 0) {
+      await db.insert(brandMentions).values(toInsert);
+      added = toInsert.length;
+    }
   }
 
   return { added, total: collected.length, errors };

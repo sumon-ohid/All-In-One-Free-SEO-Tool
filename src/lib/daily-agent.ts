@@ -30,18 +30,36 @@ export type DailyAgentReport = {
   steps: { name: string; ok: boolean; detail?: string; durationMs: number }[];
 };
 
-export async function tickDailyAgent(): Promise<DailyAgentReport | null> {
-  const lastRun = await getSetting<number>("daily_agent_runner.last_run").catch(
-    () => null,
-  );
-  if (
-    typeof lastRun === "number" &&
-    Date.now() - lastRun < DAILY_INTERVAL_MS
-  ) {
-    return null;
-  }
-  await setSetting("daily_agent_runner.last_run", Date.now());
+// Process-local lock so two concurrent tick calls don't overlap. SQLite
+// is single-writer anyway but multiple in-flight tickDailyAgent calls
+// would still duplicate work for ~50ms between the read + write.
+let _tickInFlight = false;
 
+export async function tickDailyAgent(): Promise<DailyAgentReport | null> {
+  if (_tickInFlight) return null;
+  _tickInFlight = true;
+  try {
+    const lastRun = await getSetting<number>(
+      "daily_agent_runner.last_run",
+    ).catch((err) => {
+      console.error("[daily-agent] getSetting failed:", err);
+      return null;
+    });
+    if (
+      typeof lastRun === "number" &&
+      Date.now() - lastRun < DAILY_INTERVAL_MS
+    ) {
+      return null;
+    }
+    // Claim the slot BEFORE doing work so a concurrent caller backs off.
+    await setSetting("daily_agent_runner.last_run", Date.now());
+    return await runDailyAgentBody();
+  } finally {
+    _tickInFlight = false;
+  }
+}
+
+async function runDailyAgentBody(): Promise<DailyAgentReport> {
   const startedAt = new Date();
   const steps: DailyAgentReport["steps"] = [];
 

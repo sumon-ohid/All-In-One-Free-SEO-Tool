@@ -86,9 +86,11 @@ export async function scrapeGbp(rawUrl: string): Promise<GbpReport> {
             const cnt = (reviewCountEl?.textContent ?? "").match(
               /([\d,]+)\s*review/i,
             );
+            const rating = parseFloat(m[1]);
+            const count = cnt ? parseInt(cnt[1].replace(/,/g, ""), 10) : null;
             return {
-              rating: parseFloat(m[1]),
-              count: cnt ? parseInt(cnt[1].replace(/,/g, ""), 10) : null,
+              rating: Number.isFinite(rating) ? rating : null,
+              count: count != null && Number.isFinite(count) ? count : null,
             };
           }
         }
@@ -96,7 +98,7 @@ export async function scrapeGbp(rawUrl: string): Promise<GbpReport> {
       })
       .catch(() => null);
 
-    if (ratingData) {
+    if (ratingData && ratingData.rating !== null) {
       out.rating = ratingData.rating;
       out.reviewCount = ratingData.count;
     }
