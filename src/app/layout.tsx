@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TopBar } from "@/components/shell/top-bar";
 import { AIAssistant } from "@/components/shell/ai-assistant";
@@ -9,14 +9,18 @@ import { getUnreadCounts } from "@/lib/unread-counts";
 import { getUiMode } from "./settings/ui-actions";
 import "./globals.css";
 
-const geistSans = Geist({
+// Inter is warmer + more readable at small sizes than Geist's precise grotesk.
+// Same web-safe quality; same variable-weight support.
+const sansFont = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const monoFont = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -62,7 +66,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       data-ui-mode={uiMode}
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${sansFont.variable} ${monoFont.variable} h-full antialiased`}
     >
       <body className="h-screen overflow-hidden bg-background text-foreground">
         <QuickAddClientProvider>

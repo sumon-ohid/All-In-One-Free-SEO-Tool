@@ -16,7 +16,9 @@ export type ActivityKind =
   | "outreach.sent"
   | "google.connected"
   | "google.disconnected"
-  | "google.credentials_cleared";
+  | "google.credentials_cleared"
+  | "system.update_available"
+  | "system.updated";
 
 export type ActivityLevel = "info" | "success" | "warning" | "error";
 

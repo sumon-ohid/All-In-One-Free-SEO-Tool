@@ -84,42 +84,47 @@
 }
 
 .dark {
-  /* Deeper, near-black background with subtle blue-violet tint for premium feel */
-  --background: oklch(0.085 0.012 265);
-  --foreground: oklch(0.985 0.004 265);
-  /* Card has clearly visible separation from bg — feels lifted */
-  --card: oklch(0.155 0.015 265);
-  --card-foreground: oklch(0.985 0.004 265);
-  --popover: oklch(0.18 0.018 265);
-  --popover-foreground: oklch(0.985 0.004 265);
-  /* Vivid, high-saturation primary */
-  --primary: oklch(0.7 0.22 275);
-  --primary-foreground: oklch(0.08 0.012 265);
-  --secondary: oklch(0.22 0.02 265);
-  --secondary-foreground: oklch(0.985 0.004 265);
-  --muted: oklch(0.18 0.016 265);
-  --muted-foreground: oklch(0.7 0.02 265);
-  --accent: oklch(0.24 0.028 265);
-  --accent-foreground: oklch(0.985 0.004 265);
-  --destructive: oklch(0.7 0.24 22);
-  /* More visible borders for crisper depth */
-  --border: oklch(1 0 0 / 10%);
+  /* Slate-tinted near-black — more professional than the previous violet
+     lean. Neutral hue (240 = blue-slate) reads as "serious tool". */
+  --background: oklch(0.11 0.012 240);
+  --foreground: oklch(0.97 0.005 240);
+  /* Card lifted with clear contrast vs background */
+  --card: oklch(0.165 0.014 240);
+  --card-foreground: oklch(0.97 0.005 240);
+  --popover: oklch(0.185 0.018 240);
+  --popover-foreground: oklch(0.97 0.005 240);
+  /* Brand primary — kept violet but lower saturation so it reads
+     "serious" rather than "neon". 0.6 lightness × 0.15 chroma is the
+     Linear / Vercel zone. */
+  --primary: oklch(0.62 0.16 268);
+  --primary-foreground: oklch(0.08 0.012 240);
+  --secondary: oklch(0.22 0.018 240);
+  --secondary-foreground: oklch(0.97 0.005 240);
+  --muted: oklch(0.19 0.014 240);
+  /* MORE contrast in muted-foreground — was 0.7, now 0.78 so secondary
+     text is readable on first glance. */
+  --muted-foreground: oklch(0.78 0.018 240);
+  --accent: oklch(0.24 0.022 240);
+  --accent-foreground: oklch(0.97 0.005 240);
+  --destructive: oklch(0.65 0.2 25);
+  /* Sharper borders for crisp card edges */
+  --border: oklch(1 0 0 / 11%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.7 0.22 275 / 60%);
+  --ring: oklch(0.62 0.16 268 / 55%);
   --chart-1: oklch(0.7 0.22 275);
   --chart-2: oklch(0.78 0.17 200);
   --chart-3: oklch(0.82 0.18 80);
   --chart-4: oklch(0.72 0.23 22);
   --chart-5: oklch(0.78 0.18 320);
-  /* Sidebar slightly darker than card to create natural depth hierarchy */
-  --sidebar: oklch(0.12 0.014 265);
-  --sidebar-foreground: oklch(0.985 0.004 265);
-  --sidebar-primary: oklch(0.7 0.22 275);
-  --sidebar-primary-foreground: oklch(0.08 0.012 265);
-  --sidebar-accent: oklch(0.22 0.02 265);
-  --sidebar-accent-foreground: oklch(0.985 0.004 265);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.7 0.22 275 / 60%);
+  /* Sidebar slightly darker than card for depth hierarchy */
+  --sidebar: oklch(0.135 0.012 240);
+  --sidebar-foreground: oklch(0.97 0.005 240);
+  --sidebar-primary: oklch(0.62 0.16 268);
+  --sidebar-primary-foreground: oklch(0.08 0.012 240);
+  --sidebar-accent: oklch(0.22 0.018 240);
+  --sidebar-accent-foreground: oklch(0.97 0.005 240);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.62 0.16 268 / 55%);
 }
 
 @layer base {
@@ -140,29 +145,23 @@
     line-height: 1.6;
     letter-spacing: -0.005em;
     background-image:
-      /* Top-left brand glow */
+      /* Top-left brand wash — much more muted than before, no neon */
       radial-gradient(
-        ellipse 60% 45% at 8% -10%,
-        oklch(0.6 0.28 285 / 0.32),
-        transparent 60%
-      ),
-      /* Top-right cyan glow */
-      radial-gradient(
-        ellipse 50% 40% at 95% 5%,
-        oklch(0.7 0.22 200 / 0.22),
+        ellipse 70% 50% at 8% -10%,
+        oklch(0.5 0.15 268 / 0.18),
         transparent 65%
       ),
-      /* Bottom-left magenta whisper */
+      /* Top-right cooler accent */
       radial-gradient(
-        ellipse 55% 45% at 5% 100%,
-        oklch(0.6 0.25 320 / 0.18),
-        transparent 65%
+        ellipse 55% 45% at 95% 5%,
+        oklch(0.55 0.12 220 / 0.10),
+        transparent 70%
       ),
-      /* Bottom-right warmth */
+      /* Bottom-left whisper — subtle depth, no color shift */
       radial-gradient(
-        ellipse 50% 40% at 100% 100%,
-        oklch(0.65 0.22 30 / 0.10),
-        transparent 65%
+        ellipse 60% 45% at 5% 100%,
+        oklch(0.4 0.08 268 / 0.10),
+        transparent 70%
       );
     background-attachment: fixed;
     font-feature-settings:

@@ -1,19 +1,22 @@
 /**
- * Update endpoint — checks GitHub for a newer commit on `main` than the
- * one we're running. The frontend Settings page polls this to show
- * "Update available" when there's something new.
+ * Update endpoint — checks GitHub for a newer commit + applies it.
  *
- * Triggering the actual update is a separate POST that re-runs the
- * installer script in the background. The user has to wait ~30s for the
- * server to restart on its own port.
+ *   GET  → reports local vs remote SHA, computes updateAvailable.
+ *   POST → does git pull, runs `pnpm install` if package.json changed,
+ *          applies new migrations, logs to activity, and tells the UI
+ *          whether a manual restart is needed.
  *
- * Read-only by default — POST only when explicitly asked.
+ * Most updates don't need a manual restart because Next.js dev mode
+ * hot-reloads file changes. Server-only code (lib/, route.ts) often
+ * picks up on next request. We flag `restartRecommended: true` only
+ * when package.json changed.
  */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { logActivity } from "@/lib/activity";
 
 const exec = promisify(execFile);
 
@@ -23,8 +26,6 @@ const REPO = "IamRamgarhia/seo";
 const BRANCH = "main";
 
 async function getLocalSha(): Promise<string | null> {
-  // Try `git rev-parse HEAD` from repo root. Falls back to reading
-  // .git/HEAD if git binary is unavailable (e.g. running from a ZIP).
   try {
     const { stdout } = await exec("git", ["rev-parse", "HEAD"], {
       cwd: process.cwd(),
@@ -66,34 +67,57 @@ export async function GET() {
   const [local, remote] = await Promise.all([getLocalSha(), getRemoteSha()]);
   const updateAvailable =
     local !== null && remote !== null && local !== remote;
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      local: local?.slice(0, 7) ?? null,
-      remote: remote?.slice(0, 7) ?? null,
-      updateAvailable,
-      // GitHub compare URL so the user can see the changelog
-      diffUrl:
-        local && remote
-          ? `https://github.com/${REPO}/compare/${local.slice(0, 7)}...${remote.slice(0, 7)}`
-          : `https://github.com/${REPO}/commits/${BRANCH}`,
-    }),
-    {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    },
-  );
+
+  // Surface as a notification once per remote-SHA so the bell badges.
+  // No-op if logActivity dedupes elsewhere; logActivity itself swallows errors.
+  if (updateAvailable && remote) {
+    void logActivity({
+      kind: "system.update_available",
+      message: `New version on GitHub (${remote.slice(0, 7)}). Click to update.`,
+      level: "info",
+      entityType: "update",
+    }).catch(() => undefined);
+  }
+
+  return Response.json({
+    ok: true,
+    local: local?.slice(0, 7) ?? null,
+    remote: remote?.slice(0, 7) ?? null,
+    updateAvailable,
+    diffUrl:
+      local && remote
+        ? `https://github.com/${REPO}/compare/${local.slice(0, 7)}...${remote.slice(0, 7)}`
+        : `https://github.com/${REPO}/commits/${BRANCH}`,
+  });
 }
 
-/**
- * POST → trigger the update. Spawns the installer in the background and
- * returns immediately. The user has to wait for the server to come back.
- *
- * Refuses to update if running inside a Docker container where the
- * installer wouldn't work right (mount, image rebuild required).
- */
+type Step = { name: string; status: "ok" | "skip" | "error"; detail?: string };
+
+function packageJsonHash(): string | null {
+  try {
+    const buf = readFileSync(path.join(process.cwd(), "package.json"));
+    // FNV-1a style cheap hash; we only need to detect changes
+    let h = 2166136261;
+    for (let i = 0; i < buf.length; i++) {
+      h = (h ^ buf[i]) >>> 0;
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return h.toString(16);
+  } catch {
+    return null;
+  }
+}
+
+async function detectPm(): Promise<"pnpm" | "npm"> {
+  try {
+    await exec("pnpm", ["--version"], { cwd: process.cwd(), timeout: 5_000 });
+    return "pnpm";
+  } catch {
+    return "npm";
+  }
+}
+
 export async function POST() {
-  // Don't run in Docker — installer needs the host's package manager.
   if (process.env.RUNNING_IN_DOCKER === "1") {
     return Response.json(
       {
@@ -106,39 +130,140 @@ export async function POST() {
   }
 
   try {
-    // Find git on the path
     await exec("git", ["--version"], { cwd: process.cwd() });
   } catch {
     return Response.json(
       {
         ok: false,
         error:
-          "git not found — re-run the install command from your README to upgrade.",
+          "git not found on the server — re-run the install command from the README to upgrade.",
       },
       { status: 500 },
     );
   }
 
-  // Run git pull synchronously so we can report success/failure clearly.
+  const steps: Step[] = [];
+  let restartRecommended = false;
+
+  const pkgHashBefore = packageJsonHash();
+
+  // 1. fetch + merge
   try {
-    const { stdout, stderr } = await exec("git", ["pull", "--ff-only"], {
+    await exec("git", ["fetch", "origin", BRANCH], {
       cwd: process.cwd(),
       timeout: 60_000,
     });
-    return Response.json({
-      ok: true,
-      message:
-        "Pulled the latest code. Restart the server to apply: stop the process and re-run pnpm dev (or docker compose up -d).",
-      stdout: stdout.trim(),
-      stderr: stderr.trim(),
-    });
+    steps.push({ name: "Fetch from GitHub", status: "ok" });
   } catch (err) {
+    steps.push({
+      name: "Fetch from GitHub",
+      status: "error",
+      detail: (err as Error).message,
+    });
+    return Response.json({ ok: false, error: "git fetch failed", steps }, { status: 500 });
+  }
+
+  try {
+    const { stdout } = await exec("git", ["pull", "--ff-only"], {
+      cwd: process.cwd(),
+      timeout: 60_000,
+    });
+    if (/Already up to date|already up.to.date/i.test(stdout)) {
+      steps.push({ name: "Pull latest commit", status: "skip", detail: "Already on latest" });
+      return Response.json({
+        ok: true,
+        message: "You're already on the latest version.",
+        steps,
+        restartRecommended: false,
+      });
+    }
+    const lastLine = stdout.split("\n").filter(Boolean).slice(-1)[0] ?? "Pulled";
+    steps.push({ name: "Pull latest commit", status: "ok", detail: lastLine.slice(0, 80) });
+  } catch (err) {
+    steps.push({
+      name: "Pull latest commit",
+      status: "error",
+      detail: (err as Error).message,
+    });
     return Response.json(
-      {
-        ok: false,
-        error: (err as Error).message,
-      },
+      { ok: false, error: "git pull failed", steps },
       { status: 500 },
     );
   }
+
+  // 2. detect package.json change → run install
+  const pkgHashAfter = packageJsonHash();
+  if (pkgHashBefore !== pkgHashAfter) {
+    restartRecommended = true;
+    try {
+      const pm = await detectPm();
+      await exec(pm, ["install"], {
+        cwd: process.cwd(),
+        timeout: 300_000,
+      });
+      steps.push({
+        name: "Install new dependencies",
+        status: "ok",
+        detail: `${pm} install`,
+      });
+    } catch (err) {
+      steps.push({
+        name: "Install new dependencies",
+        status: "error",
+        detail: (err as Error).message,
+      });
+    }
+  } else {
+    steps.push({
+      name: "Install new dependencies",
+      status: "skip",
+      detail: "package.json unchanged",
+    });
+  }
+
+  // 3. apply any new migrations
+  try {
+    const migrateScript = path.join(process.cwd(), "scripts", "migrate.cjs");
+    if (existsSync(migrateScript)) {
+      const { stdout } = await exec("node", [migrateScript], {
+        cwd: process.cwd(),
+        timeout: 60_000,
+      });
+      const applied = stdout.match(/\d+ new migration/);
+      steps.push({
+        name: "Apply database migrations",
+        status: applied ? "ok" : "skip",
+        detail: applied ? applied[0] : "Schema already current",
+      });
+    } else {
+      steps.push({
+        name: "Apply database migrations",
+        status: "skip",
+        detail: "no migrate script",
+      });
+    }
+  } catch (err) {
+    steps.push({
+      name: "Apply database migrations",
+      status: "error",
+      detail: (err as Error).message,
+    });
+  }
+
+  // 4. log activity so it surfaces in the bell
+  const newSha = (await getLocalSha())?.slice(0, 7) ?? "latest";
+  await logActivity({
+    kind: "system.updated",
+    message: `Updated to commit ${newSha}${restartRecommended ? " — restart required for new dependencies" : ""}`,
+    level: "success",
+  }).catch(() => undefined);
+
+  return Response.json({
+    ok: true,
+    message: restartRecommended
+      ? "Update applied. Restart the server to load the new dependencies."
+      : "Update applied. Next.js will hot-reload the changes — refresh the page in a few seconds.",
+    steps,
+    restartRecommended,
+  });
 }

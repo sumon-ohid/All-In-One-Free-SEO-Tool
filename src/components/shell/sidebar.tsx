@@ -30,12 +30,9 @@ import {
   GitCompare,
   MapPin,
   Wrench,
-  Unlink,
   Building,
   Image as ImageIcon,
   Layers,
-  Stethoscope,
-  Save,
   Newspaper,
   TrendingDown,
   Flame,
@@ -43,158 +40,171 @@ import {
   Magnet,
   Video,
   Globe,
+  ChevronDown,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 
-type Section = {
+type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
 };
 
-const groups: { title: string; items: Section[] }[] = [
+type NavGroup = {
+  id: string;
+  title: string;
+  /** Pinned groups are always visible and not collapsible. */
+  pinned?: boolean;
+  /** Default-expanded if true; otherwise collapsed by default. */
+  defaultOpen?: boolean;
+  items: NavItem[];
+};
+
+const groups: NavGroup[] = [
   {
-    title: "Workspace",
+    id: "essentials",
+    title: "Essentials",
+    pinned: true,
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/morning", label: "Morning briefing", icon: Activity },
-      { href: "/digest", label: "Weekly digest", icon: Send },
-      { href: "/seo-chat", label: "SEO Chat", icon: Bot },
-      { href: "/grader", label: "Instant audit", icon: Sparkles },
-      { href: "/import", label: "Import screenshot", icon: ScanText },
-      { href: "/capture", label: "Universal capture", icon: Magnet },
-      { href: "/csv-import", label: "CSV import", icon: FileDown },
-      { href: "/bot-logs", label: "AI bot logs", icon: Bot },
       { href: "/clients", label: "Clients", icon: Users },
-      { href: "/capacity", label: "Capacity", icon: Gauge },
-      { href: "/agent", label: "AI agent", icon: Bot },
-      { href: "/ask", label: "Ask the tool", icon: Bot },
+      { href: "/seo-chat", label: "SEO chat", icon: Bot },
+      { href: "/audits", label: "Audits", icon: ClipboardList },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
+      { href: "/tools", label: "All tools", icon: Wrench },
+      { href: "/reports", label: "Reports", icon: FileDown },
     ],
   },
   {
-    title: "Insight",
+    id: "everyday",
+    title: "Everyday",
+    defaultOpen: false,
     items: [
-      { href: "/audits", label: "Audits", icon: ClipboardList },
-      { href: "/cwv", label: "Core Web Vitals", icon: Gauge },
-      { href: "/cwv/archive", label: "CWV archive", icon: Gauge },
-      { href: "/serp-scans", label: "SERP scans archive", icon: Globe },
-      { href: "/landing-perf", label: "Landing-page perf", icon: Gauge },
-      { href: "/keywords", label: "Keywords", icon: Search },
-      { href: "/cannibalization", label: "Cannibalization", icon: GitMerge },
-      { href: "/content", label: "Content", icon: FileText },
+      { href: "/morning", label: "Morning briefing", icon: Activity },
+      { href: "/digest", label: "Weekly digest", icon: Send },
+      { href: "/grader", label: "Instant audit", icon: Sparkles },
+      { href: "/agent", label: "AI agent", icon: Bot },
+      { href: "/ask", label: "Ask the tool", icon: Bot },
+      { href: "/capacity", label: "Capacity", icon: Gauge },
+      { href: "/activity", label: "Activity log", icon: History },
+    ],
+  },
+  {
+    id: "content",
+    title: "Content",
+    items: [
+      { href: "/content", label: "Content overview", icon: FileText },
       { href: "/content/calendar", label: "Content calendar", icon: FileText },
       { href: "/blog", label: "AI blog writer", icon: Wand2 },
-      { href: "/title-tests", label: "Title A/B tests", icon: Wand2 },
-      { href: "/backlinks", label: "Backlinks", icon: Link2 },
-      { href: "/link-building", label: "Link building", icon: Link2 },
-      { href: "/citations", label: "Citations / local", icon: MapPin },
-      { href: "/local-rank", label: "Local rank", icon: MapPin },
-      { href: "/gbp", label: "Google Business", icon: Building },
-      { href: "/broken-links", label: "Broken links", icon: Unlink },
-      { href: "/image-audit", label: "Image audit", icon: ImageIcon },
+      { href: "/content-decay", label: "Content decay", icon: TrendingDown },
       { href: "/content-gap", label: "Content gap", icon: GitCompare },
       { href: "/topic-clusters", label: "Topic clusters", icon: Layers },
-      { href: "/content-decay", label: "Content decay", icon: TrendingDown },
+      { href: "/title-tests", label: "Title A/B tests", icon: Wand2 },
+      { href: "/meta-rewrite", label: "Meta rewrite batch", icon: Wand2 },
+    ],
+  },
+  {
+    id: "keywords",
+    title: "Keywords & ranks",
+    items: [
+      { href: "/keywords", label: "Tracked keywords", icon: Search },
+      { href: "/cannibalization", label: "Cannibalization", icon: GitMerge },
+      { href: "/cwv", label: "Core Web Vitals", icon: Gauge },
+      { href: "/landing-perf", label: "Landing-page perf", icon: Gauge },
+      { href: "/serp-scans", label: "SERP scans archive", icon: Globe },
+    ],
+  },
+  {
+    id: "backlinks",
+    title: "Backlinks & outreach",
+    items: [
+      { href: "/backlinks", label: "Backlinks", icon: Link2 },
+      { href: "/link-building", label: "Link building", icon: Link2 },
+      { href: "/link-building/prospects", label: "Find prospects", icon: Link2 },
+      { href: "/link-building/library", label: "Library (314 sites)", icon: Globe },
       { href: "/outreach", label: "Outreach", icon: Send },
       { href: "/outreach/templates", label: "Outreach templates", icon: Send },
-      { href: "/link-building/prospects", label: "Link prospecting", icon: Link2 },
+      { href: "/broken-links", label: "Broken links", icon: Link2 },
+    ],
+  },
+  {
+    id: "local",
+    title: "Local SEO",
+    items: [
+      { href: "/gbp", label: "Google Business Profile", icon: Building },
+      { href: "/citations", label: "Citations", icon: MapPin },
+      { href: "/local-rank", label: "Local rank tracker", icon: MapPin },
+      { href: "/local-grid", label: "Local rank heatmap", icon: MapPin },
+    ],
+  },
+  {
+    id: "competitors",
+    title: "Competitors & brand",
+    items: [
       { href: "/competitors", label: "Competitors", icon: Network },
       { href: "/competitors/playbook", label: "Competitor playbook", icon: Network },
       { href: "/brand-monitor", label: "Brand monitor", icon: Network },
       { href: "/brand-serp", label: "Brand SERP", icon: Network },
       { href: "/knowledge-panel", label: "Knowledge Panel", icon: Globe },
       { href: "/author-authority", label: "Author authority", icon: Users },
-      { href: "/local-grid", label: "Local heatmap", icon: MapPin },
       { href: "/compare", label: "Site compare", icon: GitCompare },
-      { href: "/monitor", label: "Page monitor", icon: Activity },
-      { href: "/automations", label: "Automations", icon: Workflow },
-      { href: "/ai-visibility", label: "AI visibility", icon: Sparkles },
-      { href: "/activity", label: "Activity log", icon: History },
-      { href: "/annotations", label: "Chart annotations", icon: History },
-      { href: "/history", label: "Tool run history", icon: Save },
-      { href: "/chats", label: "AI chat history", icon: Bot },
-      { href: "/reports/archive", label: "Report archive", icon: FileDown },
     ],
   },
   {
-    title: "Quick tools",
+    id: "ai-visibility",
+    title: "AI visibility",
     items: [
-      { href: "/links", label: "Smart links", icon: Link2 },
-      { href: "/tools/link-graph", label: "Link graph", icon: Network },
-      { href: "/tools/link-recommender", label: "AI link recommender", icon: Sparkles },
-      { href: "/tools/content-grader", label: "Content grader", icon: Gauge },
-      { href: "/tools/refresh", label: "Refresh detector", icon: TrendingDown },
-      { href: "/tools/eeat-audit", label: "E-E-A-T audit", icon: Stethoscope },
-      { href: "/tools/content-helpers", label: "Image + tag helpers", icon: ImageIcon },
-      { href: "/meta-rewrite", label: "Meta rewrite batch", icon: Wand2 },
-      { href: "/tools/backlink-discovery", label: "Backlink discovery", icon: Link2 },
-      { href: "/tools/search-volume", label: "Search volume", icon: Sparkles },
-      { href: "/tools/health-check", label: "Health check", icon: Stethoscope },
-      { href: "/tools/local-cwv", label: "Local CWV", icon: Gauge },
-      { href: "/tools/render", label: "JS render + screenshot", icon: ImageIcon },
-      { href: "/tools/browser-agent", label: "Browser agent", icon: Bot },
-      { href: "/tools/gsc-coverage", label: "GSC coverage", icon: ListChecks },
-      { href: "/tools/redirects-bulk", label: "Bulk redirects", icon: Activity },
-      { href: "/tools/migration-map", label: "Migration map", icon: GitMerge },
-      { href: "/tools/schema-validate", label: "Schema validator", icon: Sparkles },
-      { href: "/tools/social-preview", label: "OG / Twitter preview", icon: Sparkles },
-      { href: "/tools/mobile-friendly", label: "Mobile-friendly", icon: Sparkles },
-      { href: "/tools/anchor-distribution", label: "Anchor distribution", icon: Link2 },
-      { href: "/tools/dns-whois", label: "DNS + WHOIS", icon: Sparkles },
-      { href: "/tools/pagerank", label: "PageRank simulator", icon: Network },
-      { href: "/tools/intent-classifier", label: "Intent classifier", icon: Sparkles },
-      { href: "/tools/disavow", label: "Disavow generator", icon: Sparkles },
-      { href: "/tools/brief", label: "Content brief composite", icon: FileText },
-      { href: "/tools/cluster", label: "Topic cluster builder", icon: Layers },
-      { href: "/tools/programmatic-seo", label: "Programmatic SEO", icon: Layers },
-      { href: "/tools/og-image", label: "OG image generator", icon: ImageIcon },
-      { href: "/tools/serp-features", label: "SERP feature tracker", icon: Sparkles },
-      { href: "/tools/branded-split", label: "Branded GSC split", icon: GitMerge },
-      { href: "/tools/robots-history", label: "robots.txt history", icon: History },
-      { href: "/tools/uptime", label: "Uptime monitor", icon: Activity },
-      { href: "/tools/migration-parity", label: "Migration parity", icon: GitMerge },
-      { href: "/tools/hreflang-gen", label: "Hreflang generator", icon: Sparkles },
-      { href: "/tools/wayback", label: "Wayback timeline", icon: History },
-      { href: "/tools/summarizer", label: "AI summarizer", icon: Sparkles },
-      { href: "/tools/bulk-alt", label: "Bulk alt-text", icon: ImageIcon },
-      { href: "/tools/news-headline", label: "News headline audit", icon: Newspaper },
-      { href: "/tools/auto-link", label: "Auto-link suggester", icon: Link2 },
-      { href: "/tools/redirects-manager", label: "Redirect manager", icon: GitMerge },
-      { href: "/tools/canonical-audit", label: "Canonical audit", icon: GitMerge },
-      { href: "/tools/soft-404", label: "Soft 404 catcher", icon: ScanText },
-      { href: "/tools/youtube-audit", label: "YouTube SEO audit", icon: Video },
-      { href: "/tools/trending", label: "Trending ideas", icon: Flame },
-      { href: "/tools/traffic-drop", label: "Traffic-drop diagnostic", icon: TrendingDown },
-      { href: "/tools/ai-schema", label: "AI schema generator", icon: Sparkles },
-      { href: "/tools/outreach-personalize", label: "Outreach personalizer", icon: Send },
-      { href: "/tools/reddit-research", label: "Reddit research", icon: Flame },
-      { href: "/news", label: "SEO news", icon: Newspaper },
-      { href: "/tools", label: "All quick tools", icon: Wrench },
-      { href: "/snapshots", label: "Saved snapshots", icon: Save },
-      { href: "/algorithm-updates", label: "Algorithm updates", icon: History },
+      { href: "/ai-visibility", label: "AI visibility tracker", icon: Sparkles },
+      { href: "/bot-logs", label: "AI bot logs", icon: Bot },
+      { href: "/chats", label: "AI chat history", icon: Bot },
     ],
   },
   {
+    id: "monitoring",
+    title: "Monitoring + history",
+    items: [
+      { href: "/monitor", label: "Page monitor", icon: Activity },
+      { href: "/snapshots", label: "Snapshots", icon: ImageIcon },
+      { href: "/annotations", label: "Chart annotations", icon: History },
+      { href: "/history", label: "Tool run history", icon: History },
+      { href: "/algorithm-updates", label: "Algorithm updates", icon: History },
+      { href: "/news", label: "SEO news", icon: Newspaper },
+    ],
+  },
+  {
+    id: "imports",
+    title: "Imports",
+    items: [
+      { href: "/import", label: "Import screenshot", icon: ScanText },
+      { href: "/capture", label: "Universal capture", icon: Magnet },
+      { href: "/csv-import", label: "CSV import", icon: FileDown },
+      { href: "/image-audit", label: "Image audit", icon: ImageIcon },
+    ],
+  },
+  {
+    id: "deliverables",
     title: "Deliverables",
     items: [
-      { href: "/reports", label: "Reports", icon: FileDown },
+      { href: "/reports/archive", label: "Report archive", icon: FileDown },
+      { href: "/automations", label: "Automations", icon: Workflow },
       { href: "/invoices", label: "Invoices", icon: Receipt },
     ],
   },
   {
+    id: "account",
     title: "Account",
+    pinned: true,
     items: [
-      { href: "/learn", label: "Learn", icon: GraduationCap },
-      { href: "/knowledge", label: "SEO knowledge hub", icon: GraduationCap },
       { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/settings/ai-learning", label: "AI learning", icon: Sparkles },
-      { href: "/settings/ai-usage", label: "AI usage + cost", icon: Activity },
+      { href: "/learn", label: "Learn", icon: GraduationCap },
+      { href: "/knowledge", label: "Knowledge hub", icon: GraduationCap },
     ],
   },
 ];
 
-const STORAGE_KEY = "seo:sidebar-collapsed";
+const COLLAPSED_KEY = "seo:sidebar-collapsed";
+const OPEN_GROUPS_KEY = "seo:sidebar-open-groups";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -208,29 +218,67 @@ export function Sidebar({
 } = {}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const unread = unreadByHref ?? {};
 
-  // Hydrate from localStorage on mount — defer the setState to avoid cascading
-  // renders flagged by react-hooks/set-state-in-effect.
+  // Hydrate from localStorage on mount
   useEffect(() => {
-    let stored: string | null = null;
     try {
-      stored = window.localStorage.getItem(STORAGE_KEY);
+      const stored = window.localStorage.getItem(COLLAPSED_KEY);
+      if (stored === "1") setCollapsed(true);
     } catch {}
-    if (stored === "1") {
-      const t = setTimeout(() => setCollapsed(true), 0);
-      return () => clearTimeout(t);
-    }
+    try {
+      const stored = window.localStorage.getItem(OPEN_GROUPS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Record<string, boolean>;
+        setOpenGroups(parsed);
+      }
+    } catch {}
   }, []);
+
+  // Auto-open the group containing the current route — even if the user
+  // had it collapsed — so navigation context is always visible.
+  useEffect(() => {
+    for (const g of groups) {
+      if (g.items.some((it) => isActive(pathname, it.href))) {
+        setOpenGroups((prev) =>
+          prev[g.id] === true ? prev : { ...prev, [g.id]: true },
+        );
+      }
+    }
+  }, [pathname]);
 
   function toggle() {
     setCollapsed((prev) => {
       const next = !prev;
       try {
-        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
       } catch {}
       return next;
     });
+  }
+
+  function toggleGroup(id: string) {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        window.localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
+
+  // Trigger the global SearchPalette via its keyboard shortcut. The palette
+  // listens for cmd/ctrl+K; we simulate the keypress so we don't have to
+  // wire a context.
+  function openSearch() {
+    const evt = new KeyboardEvent("keydown", {
+      key: "k",
+      metaKey: true,
+      ctrlKey: true,
+      bubbles: true,
+    });
+    document.dispatchEvent(evt);
   }
 
   return (
@@ -275,7 +323,6 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Collapsed-mode expand button (sits at top of nav) */}
       {collapsed && (
         <div className="flex justify-center pt-3">
           <button
@@ -290,98 +337,149 @@ export function Sidebar({
         </div>
       )}
 
+      {/* Find anything — opens the global search palette */}
+      {!collapsed && (
+        <div className="border-b border-white/[0.06] px-3 py-3">
+          <button
+            type="button"
+            onClick={openSearch}
+            className="group flex w-full items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-left text-sm text-muted-foreground ring-1 ring-inset ring-white/[0.06] transition-colors hover:bg-white/[0.08] hover:text-foreground"
+          >
+            <Search className="size-4 shrink-0 text-violet-300" />
+            <span className="flex-1 truncate">Find a tool, client, page…</span>
+            <kbd className="hidden rounded-md bg-white/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-inset ring-white/[0.08] sm:inline-flex">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
+      )}
+      {collapsed && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={openSearch}
+            title="Find anything (⌘K)"
+            aria-label="Find anything"
+            className="grid size-9 place-items-center rounded-lg text-muted-foreground/80 transition-colors hover:bg-white/5 hover:text-foreground"
+          >
+            <Search className="size-4" />
+          </button>
+        </div>
+      )}
+
       {/* Nav */}
       <nav
-        className={`flex-1 overflow-y-auto py-5 ${
+        className={`flex-1 overflow-y-auto py-3 ${
           collapsed ? "px-2" : "px-3"
         }`}
       >
-        {groups.map((group) => (
-          <div key={group.title} className="mb-6">
-            {!collapsed && (
-              <div className="px-3 pb-2.5 text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
-                {group.title}
-              </div>
-            )}
-            {collapsed && (
-              <div
-                aria-hidden
-                className="mx-auto mb-2 h-px w-6 bg-white/[0.06]"
-              />
-            )}
-            <ul className="space-y-1">
-              {group.items.map(({ href, label, icon: Icon }) => {
-                const active = isActive(pathname, href);
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      title={collapsed ? label : undefined}
-                      aria-label={collapsed ? label : undefined}
-                      className={
-                        collapsed
-                          ? `group relative flex h-10 items-center justify-center rounded-lg transition-all ${
+        {groups.map((group) => {
+          const isOpen =
+            group.pinned ||
+            (openGroups[group.id] ?? group.defaultOpen ?? false);
+          return (
+            <div key={group.id} className="mb-3">
+              {!collapsed && !group.pinned && (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  className="group flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                >
+                  <span>{group.title}</span>
+                  {isOpen ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                </button>
+              )}
+              {!collapsed && group.pinned && (
+                <div className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+                  {group.title}
+                </div>
+              )}
+              {collapsed && (
+                <div
+                  aria-hidden
+                  className="mx-auto my-2 h-px w-6 bg-white/[0.06]"
+                />
+              )}
+              {(isOpen || collapsed) && (
+                <ul className="space-y-0.5">
+                  {group.items.map(({ href, label, icon: Icon }) => {
+                    const active = isActive(pathname, href);
+                    return (
+                      <li key={href}>
+                        <Link
+                          href={href}
+                          title={collapsed ? label : undefined}
+                          aria-label={collapsed ? label : undefined}
+                          className={
+                            collapsed
+                              ? `group relative flex h-10 items-center justify-center rounded-lg transition-all ${
+                                  active
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+                                }`
+                              : active
+                                ? "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-semibold text-foreground"
+                                : "group flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] text-muted-foreground transition-all hover:bg-white/[0.05] hover:text-foreground"
+                          }
+                        >
+                          {active && (
+                            <>
+                              <span
+                                aria-hidden
+                                className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-500/25 via-fuchsia-500/12 to-transparent"
+                              />
+                              <span
+                                aria-hidden
+                                className="absolute inset-0 rounded-lg ring-1 ring-inset ring-violet-500/35"
+                              />
+                              {!collapsed && (
+                                <span
+                                  aria-hidden
+                                  className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-violet-400 to-fuchsia-500 shadow-[0_0_12px_oklch(0.7_0.22_275_/_1)]"
+                                />
+                              )}
+                            </>
+                          )}
+                          <Icon
+                            className={`relative size-[18px] shrink-0 transition-colors ${
                               active
-                                ? "text-foreground"
-                                : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
-                            }`
-                          : active
-                            ? "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-semibold text-foreground"
-                            : "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] text-muted-foreground transition-all hover:bg-white/[0.05] hover:text-foreground hover:translate-x-0.5"
-                      }
-                    >
-                      {active && (
-                        <>
-                          <span
-                            aria-hidden
-                            className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-500/25 via-fuchsia-500/12 to-transparent"
-                          />
-                          <span
-                            aria-hidden
-                            className="absolute inset-0 rounded-lg ring-1 ring-inset ring-violet-500/35"
+                                ? "text-violet-300"
+                                : "text-muted-foreground/80 group-hover:text-foreground"
+                            }`}
                           />
                           {!collapsed && (
-                            <span
-                              aria-hidden
-                              className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-violet-400 to-fuchsia-500 shadow-[0_0_12px_oklch(0.7_0.22_275_/_1)]"
-                            />
+                            <span className="relative flex-1">{label}</span>
                           )}
-                        </>
-                      )}
-                      <Icon
-                        className={`relative size-[19px] shrink-0 transition-colors ${
-                          active
-                            ? "text-violet-300"
-                            : "text-muted-foreground/80 group-hover:text-foreground"
-                        }`}
-                      />
-                      {!collapsed && (
-                        <span className="relative flex-1">{label}</span>
-                      )}
-                      {unread[href] && unread[href] > 0 ? (
-                        collapsed ? (
-                          <span
-                            aria-label={`${unread[href]} new`}
-                            className="absolute right-1 top-1 size-2 rounded-full bg-rose-500 ring-2 ring-background"
-                          />
-                        ) : (
-                          <span className="relative ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500/20 px-1.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/40">
-                            {unread[href] > 9 ? "9+" : unread[href]}
-                          </span>
-                        )
-                      ) : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                          {unread[href] && unread[href] > 0 ? (
+                            collapsed ? (
+                              <span
+                                aria-label={`${unread[href]} new`}
+                                className="absolute right-1 top-1 size-2 rounded-full bg-rose-500 ring-2 ring-background"
+                              />
+                            ) : (
+                              <span className="relative ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500/20 px-1.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/40">
+                                {unread[href] > 9 ? "9+" : unread[href]}
+                              </span>
+                            )
+                          ) : null}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Status line */}
       <div
-        className={`border-t border-white/[0.06] py-3.5 ${
+        className={`border-t border-white/[0.06] py-3 ${
           collapsed ? "px-2" : "px-5"
         }`}
       >

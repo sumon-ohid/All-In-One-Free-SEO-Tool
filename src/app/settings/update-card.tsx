@@ -8,6 +8,8 @@ import {
   ExternalLink,
   Loader2,
   AlertCircle,
+  XCircle,
+  Circle,
 } from "lucide-react";
 
 type Status =
@@ -21,17 +23,24 @@ type Status =
   | { ok: false; error: string }
   | null;
 
+type Step = { name: string; status: "ok" | "skip" | "error"; detail?: string };
+
+type UpdateResponse = {
+  ok: boolean;
+  message?: string;
+  error?: string;
+  steps?: Step[];
+  restartRecommended?: boolean;
+};
+
 export function UpdateCard() {
   const [status, setStatus] = useState<Status>(null);
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [updateResult, setUpdateResult] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [response, setResponse] = useState<UpdateResponse | null>(null);
 
   const check = useCallback(async () => {
     setChecking(true);
-    setUpdateResult(null);
-    setUpdateError(null);
     try {
       const res = await fetch("/api/update", { cache: "no-store" });
       const j = await res.json();
@@ -52,18 +61,16 @@ export function UpdateCard() {
 
   const update = useCallback(async () => {
     setUpdating(true);
-    setUpdateResult(null);
-    setUpdateError(null);
+    setResponse(null);
     try {
       const res = await fetch("/api/update", { method: "POST" });
-      const j = await res.json();
-      if (j.ok) {
-        setUpdateResult(j.message || "Update applied. Restart the server to load the new code.");
-      } else {
-        setUpdateError(j.error || "Update failed");
-      }
+      const j = (await res.json()) as UpdateResponse;
+      setResponse(j);
     } catch (err) {
-      setUpdateError((err as Error).message || "Update request failed");
+      setResponse({
+        ok: false,
+        error: (err as Error).message || "Update request failed",
+      });
     } finally {
       setUpdating(false);
       void check();
@@ -71,19 +78,23 @@ export function UpdateCard() {
   }, [check]);
 
   return (
-    <section id="update" className="glass-apple relative overflow-hidden rounded-2xl p-5 space-y-3">
+    <section
+      id="update"
+      className="glass-apple relative overflow-hidden scroll-mt-24 rounded-2xl p-5 space-y-3"
+    >
       <header className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold">Updates</h3>
           <p className="text-[11px] text-muted-foreground">
-            One-click update from the GitHub `main` branch. Your data.db and
-            .env.local are preserved.
+            One-click update from GitHub's <code className="font-mono">main</code>
+            {" "}branch. Pulls code, installs new dependencies if needed, applies
+            migrations. Your data.db and .env.local are preserved.
           </p>
         </div>
         <button
           type="button"
           onClick={() => void check()}
-          disabled={checking}
+          disabled={checking || updating}
           className="inline-flex h-8 items-center gap-1 rounded-md bg-white/5 px-2 text-xs text-muted-foreground ring-1 ring-inset ring-white/10 hover:bg-white/10 disabled:opacity-50"
         >
           {checking ? (
@@ -129,8 +140,9 @@ export function UpdateCard() {
                 Update available
               </p>
               <p className="text-[11px] text-muted-foreground">
-                A newer commit is on GitHub. Click below to pull it; your
-                local data is unchanged.
+                A newer commit is on GitHub. Click below to pull it. Most
+                changes hot-reload — refresh the page after. If new
+                dependencies were added, we'll tell you to restart.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -169,14 +181,90 @@ export function UpdateCard() {
             </p>
           )}
 
-          {updateResult && (
-            <div className="rounded-md bg-emerald-500/10 p-3 text-[11px] text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
-              {updateResult}
+          {updating && (
+            <div className="space-y-1.5 rounded-md bg-white/[0.03] p-3 text-xs ring-1 ring-inset ring-white/5">
+              <p className="text-[11px] text-muted-foreground">
+                Working… (this can take a minute if new dependencies were added)
+              </p>
+              <ul className="space-y-1 text-[11px]">
+                <li className="flex items-center gap-2">
+                  <Loader2 className="size-3 animate-spin text-amber-300" />
+                  Fetching + pulling from GitHub
+                </li>
+                <li className="flex items-center gap-2 text-muted-foreground">
+                  <Circle className="size-3" />
+                  Installing dependencies if package.json changed
+                </li>
+                <li className="flex items-center gap-2 text-muted-foreground">
+                  <Circle className="size-3" />
+                  Applying database migrations
+                </li>
+              </ul>
             </div>
           )}
-          {updateError && (
-            <div className="rounded-md bg-rose-500/10 p-3 text-[11px] text-rose-300 ring-1 ring-inset ring-rose-500/30">
-              {updateError}
+
+          {response && response.ok && response.steps && (
+            <div className="space-y-2 rounded-md bg-emerald-500/5 p-3 ring-1 ring-inset ring-emerald-500/20">
+              <p className="text-xs font-medium text-emerald-300">
+                {response.message ?? "Update applied"}
+              </p>
+              <ul className="space-y-1 text-[11px]">
+                {response.steps.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    {s.status === "ok" ? (
+                      <CheckCircle2 className="size-3 shrink-0 text-emerald-400" />
+                    ) : s.status === "skip" ? (
+                      <Circle className="size-3 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <XCircle className="size-3 shrink-0 text-rose-400" />
+                    )}
+                    <div className="min-w-0">
+                      <span>{s.name}</span>
+                      {s.detail && (
+                        <span className="ml-1 text-muted-foreground">
+                          — {s.detail}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {response.restartRecommended && (
+                <p className="rounded-md bg-amber-500/10 p-2 text-[11px] text-amber-300 ring-1 ring-inset ring-amber-500/30">
+                  ⚠ Restart the server to finish loading new dependencies.
+                  Stop the dev server and re-run the installer command from your
+                  Welcome.txt.
+                </p>
+              )}
+            </div>
+          )}
+
+          {response && !response.ok && (
+            <div className="rounded-md bg-rose-500/10 p-3 text-[11px] text-rose-300 ring-1 ring-inset ring-rose-500/30 space-y-1">
+              <p className="font-medium">{response.error ?? "Update failed"}</p>
+              {response.steps && (
+                <ul className="space-y-0.5">
+                  {response.steps.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      {s.status === "ok" ? (
+                        <CheckCircle2 className="size-3 shrink-0 text-emerald-400" />
+                      ) : s.status === "skip" ? (
+                        <Circle className="size-3 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <XCircle className="size-3 shrink-0 text-rose-400" />
+                      )}
+                      <span>
+                        {s.name}
+                        {s.detail && (
+                          <span className="ml-1 text-muted-foreground">
+                            — {s.detail}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </>
