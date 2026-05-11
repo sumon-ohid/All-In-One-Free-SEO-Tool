@@ -1,19 +1,23 @@
 /**
- * Restart the local server. Spawns a detached launcher that waits for the
- * current process to die, then starts a fresh one. Browser is told to
- * poll-and-reload so the user just sees a quick flicker.
+ * Restart the local server on the SAME port it's currently bound to.
  *
- * Only works for native installs (the seo.cmd launcher must exist).
- * Docker users get a polite error pointing at `docker compose restart`.
+ * Port detection: we read the request's Host header (set by the browser
+ * to whatever port the user is talking to us on) so the new instance
+ * comes up on that same port — no surprise tab switching for the user.
+ *
+ * Spawning: detached child invokes seo.cmd / seo.sh with PORT + the
+ * SEO_RESTART=1 flag (which tells the launcher to skip re-opening a
+ * browser tab — the existing tab will reload itself via /api/health-ping).
  */
 
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { detectPortFromRequest, rememberPort } from "@/lib/port-memory";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(req: Request) {
   if (process.env.RUNNING_IN_DOCKER === "1") {
     return Response.json(
       {
@@ -40,19 +44,30 @@ export async function POST() {
     );
   }
 
+  const port = detectPortFromRequest(req);
+  // Persist so the desktop shortcut + any future cold-start uses this port too
+  await rememberPort(port).catch(() => undefined);
+
   // Fire-and-forget: kick off the detached relaunch on a delay long
   // enough for this response to flush, then exit ourselves.
   setTimeout(() => {
     try {
+      const env = {
+        ...process.env,
+        PORT: port,
+        SEO_RESTART: "1",
+      };
       const child = isWin
         ? spawn("cmd.exe", ["/c", "start", "", "/min", launcher], {
             cwd,
+            env,
             detached: true,
             stdio: "ignore",
             windowsHide: true,
           })
         : spawn("sh", [launcher], {
             cwd,
+            env,
             detached: true,
             stdio: "ignore",
           });
@@ -65,7 +80,7 @@ export async function POST() {
 
   return Response.json({
     ok: true,
-    message:
-      "Restarting. The page will reload itself in 8–15 seconds once the server is back.",
+    port,
+    message: `Restarting on port ${port}. The page will reload itself in 8–15 seconds once the server is back.`,
   });
 }

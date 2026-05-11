@@ -15,6 +15,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import os from "node:os";
 import { existsSync } from "node:fs";
+import { detectPortFromRequest, rememberPort } from "@/lib/port-memory";
 
 const exec = promisify(execFile);
 
@@ -60,7 +61,7 @@ export async function GET() {
   });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   if (process.platform !== "win32") {
     return Response.json(
       { ok: false, error: "Shortcuts are Windows-only." },
@@ -80,6 +81,14 @@ export async function POST() {
     );
   }
 
+  // Detect the port the user is currently on and persist it so seo.cmd
+  // reads it back when launched via the new shortcut. The shortcut
+  // itself doesn't need port baked in — seo.cmd reads .seo-port — so
+  // both the desktop and Start Menu icons stay in sync if the port
+  // ever changes (e.g. user later restarts on a different port).
+  const port = detectPortFromRequest(req);
+  await rememberPort(port).catch(() => undefined);
+
   // PowerShell one-liner: create both .lnk files via WScript.Shell COM.
   // Single-quoted paths so backslashes don't escape.
   const ps = `
@@ -91,7 +100,7 @@ foreach ($p in @('${desktop.replace(/'/g, "''")}', '${startMenu.replace(/'/g, "'
   $s.TargetPath = '${target.replace(/'/g, "''")}'
   $s.WorkingDirectory = '${cwd.replace(/'/g, "''")}'
   $s.IconLocation = '${icon.replace(/'/g, "''")}, 0'
-  $s.Description = 'SEO Tool — local SEO platform'
+  $s.Description = 'SEO Tool — local SEO platform (port ${port})'
   $s.WindowStyle = 7
   $s.Save()
 }
@@ -116,8 +125,8 @@ Write-Output 'ok'
 
   return Response.json({
     ok: true,
-    message:
-      "Shortcuts created. Look on your Desktop and in Start Menu → SEO Tool. Right-click the Start Menu entry → Pin to taskbar for one-click access.",
+    port,
+    message: `Shortcuts created (bound to port ${port}). Look on your Desktop and in Start Menu → SEO Tool. Right-click the Start Menu entry → Pin to taskbar for one-click access.`,
     paths: { desktop, startMenu },
   });
 }
