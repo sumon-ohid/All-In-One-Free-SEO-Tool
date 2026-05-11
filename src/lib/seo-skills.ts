@@ -75,14 +75,13 @@ export const SEO_SKILLS: SeoSkill[] = [
     description:
       "Crawlability, indexation, site structure, render budget, server-side concerns.",
     systemAddendum:
-      "Focus on technical SEO: crawl budget, indexation states, robots.txt, sitemaps, rendering (JS-vs-static), canonical, hreflang, log file analysis, server response codes, redirect chains, TTFB. Reference Googlebot's actual behavior. When relevant, suggest the log-analyzer / GSC-coverage / migration-parity / redirects-bulk tools.",
+      "Focus on technical SEO: crawl budget, indexation states, robots.txt, sitemaps, rendering (JS-vs-static), canonical, hreflang, server response codes, redirect chains, TTFB. Reference Googlebot's actual behavior. When relevant, suggest the GSC-coverage / migration-parity / redirects-bulk tools.",
     prompts: [
       "Explain how to read a Googlebot log file to find crawl-budget waste.",
       "Help me debug why a section of my site is 'Discovered — currently not indexed'.",
       "What's the right setup for canonical + pagination on a category archive?",
     ],
     tools: [
-      "/tools/log-analyzer",
       "/tools/gsc-coverage",
       "/tools/redirects-bulk",
       "/tools/migration-parity",
@@ -191,7 +190,6 @@ export const SEO_SKILLS: SeoSkill[] = [
       "/tools/ai-schema",
       "/tools/schema-validate",
       "/tools/bulk-alt",
-      "/tools/log-analyzer",
     ],
   },
   {

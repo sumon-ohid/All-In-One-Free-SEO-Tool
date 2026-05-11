@@ -172,9 +172,18 @@ async function checkOnGoogle(
         await page.close().catch(() => {});
       }
     },
+    // If we're capturing a screenshot we need images to load; otherwise
+    // block heavy resources to keep memory low on rank checks.
     device === "mobile"
-      ? { viewport: MOBILE_VIEWPORT, userAgent: MOBILE_UA }
-      : { viewport: { width: 1280, height: 900 } },
+      ? {
+          viewport: MOBILE_VIEWPORT,
+          userAgent: MOBILE_UA,
+          blockHeavyResources: !withScreenshot,
+        }
+      : {
+          viewport: { width: 1280, height: 900 },
+          blockHeavyResources: !withScreenshot,
+        },
   );
 }
 

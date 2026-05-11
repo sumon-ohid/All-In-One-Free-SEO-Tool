@@ -92,6 +92,22 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   let temperature = opts.temperature ?? 0.6;
   const timeoutMs = opts.timeoutMs ?? 60_000;
 
+  // Memory + cost ceiling. A 16k-token response is ~64 KB of string and
+  // covers any single AI feature we ship. Anything higher is almost
+  // certainly a feature-spec mistake; cap silently rather than letting
+  // a runaway prompt eat memory + cost.
+  const HARD_TOKEN_CEILING = 16_000;
+  if (max > HARD_TOKEN_CEILING) max = HARD_TOKEN_CEILING;
+
+  // Truncate runaway user prompts. Cap at ~50k chars (~12k tokens). Most
+  // legitimate prompts are under 5k chars; anything bigger usually means
+  // a content-pasting tool forgot to summarize.
+  const HARD_USER_CHARS = 50_000;
+  const safeUser =
+    opts.user.length > HARD_USER_CHARS
+      ? opts.user.slice(0, HARD_USER_CHARS) + "\n\n[truncated]"
+      : opts.user;
+
   if (!opts.ignoreCreditSaver) {
     const saver = await getSetting<boolean>("ai.credit_saver.enabled");
     if (saver) {
@@ -121,7 +137,7 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   // Re-pack — downstream provider helpers spread this onto their request
   const packed: AiCallOptions = {
     system,
-    user: opts.user,
+    user: safeUser,
     maxTokens: max,
     temperature,
     timeoutMs,

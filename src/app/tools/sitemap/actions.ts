@@ -16,7 +16,7 @@ const schema = z.object({
     .min(3)
     .transform((v) => (/^https?:\/\//i.test(v) ? v : `https://${v}`))
     .pipe(z.string().url()),
-  maxPages: z.coerce.number().int().min(10).max(2000).default(300),
+  maxPages: z.coerce.number().int().min(10).max(1500).default(300),
   respectRobots: z
     .union([z.literal("on"), z.literal("off"), z.undefined()])
     .transform((v) => v !== "off"),

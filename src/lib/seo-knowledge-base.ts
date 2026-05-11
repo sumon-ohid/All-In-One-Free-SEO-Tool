@@ -122,8 +122,8 @@ GSC index-coverage states:
 - Excluded by 'noindex' tag: intentional — verify it's intentional.
 - Soft 404: page returned 200 but has no content. Fix or 410.
 
-Tools: /tools/log-analyzer, /tools/gsc-coverage, /tools/redirects-bulk.`,
-    tools: ["/tools/log-analyzer", "/tools/gsc-coverage", "/tools/redirects-bulk"],
+Tools: /tools/gsc-coverage, /tools/redirects-bulk.`,
+    tools: ["/tools/gsc-coverage", "/tools/redirects-bulk"],
   },
   {
     id: "core-web-vitals",

@@ -244,14 +244,6 @@ const tools = [
     accent: "amber",
   },
   {
-    href: "/tools/log-analyzer",
-    icon: ServerCog,
-    title: "Server log analyzer",
-    description:
-      "Paste raw Apache/Nginx access log. Crawl-budget analytics — top crawled URLs, error rates, parameter waste, AI bot share. The biggest single gap in most SEO tools.",
-    accent: "violet",
-  },
-  {
     href: "/tools/gsc-coverage",
     icon: ListChecks,
     title: "GSC index coverage (batch)",

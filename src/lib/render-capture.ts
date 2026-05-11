@@ -225,7 +225,8 @@ export async function renderAndCapture(
         await page.close().catch(() => {});
       }
     },
-    { viewport, userAgent: ua },
+    // Screenshot needs all resources rendered.
+    { viewport, userAgent: ua, blockHeavyResources: false },
   );
 }
 

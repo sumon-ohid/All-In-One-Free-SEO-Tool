@@ -134,7 +134,6 @@ const groups: { title: string; items: Section[] }[] = [
       { href: "/tools/local-cwv", label: "Local CWV", icon: Gauge },
       { href: "/tools/render", label: "JS render + screenshot", icon: ImageIcon },
       { href: "/tools/browser-agent", label: "Browser agent", icon: Bot },
-      { href: "/tools/log-analyzer", label: "Log analyzer", icon: Workflow },
       { href: "/tools/gsc-coverage", label: "GSC coverage", icon: ListChecks },
       { href: "/tools/redirects-bulk", label: "Bulk redirects", icon: Activity },
       { href: "/tools/migration-map", label: "Migration map", icon: GitMerge },

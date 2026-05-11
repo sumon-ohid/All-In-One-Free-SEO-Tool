@@ -146,7 +146,6 @@ export const TOOL_LABELS: Record<string, string> = {
   brief: "Composite content brief",
   "link-graph": "Internal link graph",
   "link-recommender": "AI internal-link recommender",
-  "log-analyzer": "Server log analyzer",
   "migration-parity": "Migration parity audit",
   "mobile-friendly": "Mobile-friendly check",
   "domain-overview": "Domain overview",

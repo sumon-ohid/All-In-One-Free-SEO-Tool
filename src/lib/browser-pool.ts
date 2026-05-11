@@ -27,8 +27,11 @@ import { getSetting } from "./settings-store";
 const REALISTIC_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-const DEFAULT_CONCURRENCY = 4;
-const MAX_CONCURRENCY_HARD_CAP = 16;
+// Memory-safe defaults — Chromium contexts cost ~250-400 MB each.
+// At 2 concurrency, peak is ~800 MB which fits a 2 GB VPS comfortably.
+// Power users can raise this in Settings → Browser.
+const DEFAULT_CONCURRENCY = 2;
+const MAX_CONCURRENCY_HARD_CAP = 8;
 
 let cachedBrowser: Browser | null = null;
 let browserPromise: Promise<Browser> | null = null;
@@ -109,6 +112,20 @@ async function getBrowser(): Promise<Browser> {
         "--disable-features=IsolateOrigins,site-per-process",
         "--no-first-run",
         "--no-default-browser-check",
+        // Memory-savers — combined these knock ~150-200 MB off each context.
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-sync",
+        "--disable-default-apps",
+        "--mute-audio",
+        "--no-zygote",
+        // Cap V8 heap so a runaway page can't grow unbounded.
+        "--js-flags=--max-old-space-size=512",
       ],
     };
     browserPromise = chromium.launch(opts);
@@ -157,6 +174,13 @@ export type WithContextOptions = {
   locale?: string;
   /** Override timezone. Default "UTC". */
   timezoneId?: string;
+  /**
+   * Block resource types Playwright wastes RAM/CPU on when we only need
+   * HTML. Default blocks images/fonts/media — major memory saver for
+   * SERP scrapes + rank checks. Pass `false` to disable (e.g. when
+   * capturing a real screenshot).
+   */
+  blockHeavyResources?: boolean;
   /** Override user-agent. Default = realistic Chrome 130. */
   userAgent?: string;
   /** Pass-through accept-language header. */
@@ -198,6 +222,24 @@ export async function withBrowserContext<T>(
       },
       ...(proxy ? { proxy } : {}),
     });
+
+    // Block heavy resource types by default — saves ~100-200 MB per page
+    // load. Disable explicitly when capturing actual screenshots/visuals.
+    const blockHeavy = opts.blockHeavyResources !== false;
+    if (blockHeavy) {
+      await context.route("**/*", (route) => {
+        const t = route.request().resourceType();
+        if (
+          t === "image" ||
+          t === "media" ||
+          t === "font" ||
+          t === "stylesheet"
+        ) {
+          return route.abort();
+        }
+        return route.continue();
+      });
+    }
 
     // Inject cookies if any are stored (for logged-in scrapes / paywalls)
     const cookies = await getStoredCookies();

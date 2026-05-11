@@ -342,7 +342,8 @@ export async function measureCwv(
         await page.close().catch(() => {});
       }
     },
-    { viewport, userAgent: ua },
+    // CWV needs all resources to load to measure LCP / CLS / TBT accurately.
+    { viewport, userAgent: ua, blockHeavyResources: false },
   );
 }
 

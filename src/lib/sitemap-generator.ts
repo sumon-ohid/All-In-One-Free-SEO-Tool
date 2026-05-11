@@ -42,7 +42,10 @@ export async function crawlSite(opts: CrawlOptions): Promise<{
   pages: CrawlPage[];
   errors: { url: string; reason: string }[];
 }> {
-  const maxPages = opts.maxPages ?? 1500;
+  // Memory-safe defaults. Each crawled HTML page averages 50-200 KB; at
+  // 1500 pages that's ~250 MB held in memory mid-crawl. 500 keeps peak
+  // around 80 MB. Power users can raise to 1500 hard-cap.
+  const maxPages = Math.min(opts.maxPages ?? 500, 1500);
   const maxDepth = opts.maxDepth ?? 5;
 
   let startUrl: URL;
@@ -71,7 +74,9 @@ export async function crawlSite(opts: CrawlOptions): Promise<{
 
   // Concurrency: 16 unless robots.txt asked for a Crawl-delay, in which
   // case we drop to 4 to actually respect the host's wishes.
-  const concurrency = crawlDelayMs > 0 ? 4 : 16;
+  // Memory-safe: 8 concurrent fetches is plenty for crawl politeness
+  // and keeps in-flight HTML buffers under ~10 MB at any time.
+  const concurrency = crawlDelayMs > 0 ? 3 : 8;
 
   while (queue.length > 0 && pages.length < maxPages) {
     const batch = queue.splice(0, Math.min(concurrency, queue.length));
