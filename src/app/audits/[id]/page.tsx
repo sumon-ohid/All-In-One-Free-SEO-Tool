@@ -407,6 +407,10 @@ export default async function AuditDetailPage({
                         <FixWizard
                           issueType={g.type}
                           pageUrl={g.affectedUrls[0]}
+                          clientId={client.id}
+                          wpBridgeConnected={Boolean(
+                            client.wpEndpoint && client.wpKey,
+                          )}
                         />
                       )}
 

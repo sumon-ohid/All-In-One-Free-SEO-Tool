@@ -8,12 +8,15 @@ import {
   Copy,
   X,
   ExternalLink,
+  Send,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getFixSuggestions,
   type FixResult,
 } from "@/app/audits/fix-actions";
+import { applyFixViaWp } from "@/app/audits/wp-apply-actions";
 
 const issueLabels: Record<string, string> = {
   missing_title: "Add a <title>",
@@ -32,9 +35,15 @@ import { isFixable } from "@/lib/fix-suggestions";
 export function FixWizard({
   issueType,
   pageUrl,
+  clientId,
+  wpBridgeConnected,
 }: {
   issueType: string;
   pageUrl: string;
+  /** When present + wpBridgeConnected, enables one-click "Apply via WP". */
+  clientId?: number;
+  /** Whether the client has WP bridge plugin connected. */
+  wpBridgeConnected?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<FixResult | null>(null);
@@ -101,6 +110,8 @@ export function FixWizard({
                 issueType={issueType}
                 ctx={result.context}
                 suggestions={result.suggestions}
+                clientId={clientId}
+                wpBridgeConnected={wpBridgeConnected}
               />
             ) : null}
           </div>
@@ -114,10 +125,14 @@ function FixWizardBody({
   issueType,
   ctx,
   suggestions,
+  clientId,
+  wpBridgeConnected,
 }: {
   issueType: string;
   ctx: import("@/app/audits/fix-actions").FixContext;
   suggestions: import("@/lib/fix-suggestions").Suggestion[];
+  clientId?: number;
+  wpBridgeConnected?: boolean;
 }) {
   const titleFamily =
     issueType === "missing_title" ||
@@ -194,7 +209,14 @@ function FixWizardBody({
             Suggested fixes
           </div>
           {suggestions.map((s, i) => (
-            <SuggestionRow key={i} suggestion={s} />
+            <SuggestionRow
+              key={i}
+              suggestion={s}
+              issueType={issueType}
+              pageUrl={ctx.pageUrl}
+              clientId={clientId}
+              wpBridgeConnected={wpBridgeConnected}
+            />
           ))}
         </div>
       )}
@@ -215,10 +237,22 @@ function FixWizardBody({
 
 function SuggestionRow({
   suggestion,
+  issueType,
+  pageUrl,
+  clientId,
+  wpBridgeConnected,
 }: {
   suggestion: import("@/lib/fix-suggestions").Suggestion;
+  issueType: string;
+  pageUrl: string;
+  clientId?: number;
+  wpBridgeConnected?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [applyState, setApplyState] = useState<
+    "idle" | "applying" | "applied" | "error"
+  >("idle");
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -230,6 +264,31 @@ function SuggestionRow({
     }
   };
 
+  const handleApply = async () => {
+    if (clientId == null) return;
+    setApplyState("applying");
+    setApplyError(null);
+    try {
+      const r = await applyFixViaWp({
+        clientId,
+        pageUrl,
+        issueType,
+        newValue: suggestion.value,
+      });
+      if (r.ok) {
+        setApplyState("applied");
+      } else {
+        setApplyState("error");
+        setApplyError(r.error);
+      }
+    } catch (err) {
+      setApplyState("error");
+      setApplyError((err as Error).message ?? "Apply failed");
+    }
+  };
+
+  const canApply = wpBridgeConnected === true && clientId != null;
+
   return (
     <div className="rounded-lg border border-white/5 bg-card/40 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -237,7 +296,7 @@ function SuggestionRow({
           <div className="font-mono text-xs text-foreground break-words">
             {suggestion.value}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <span>{suggestion.rationale}</span>
             {suggestion.charCount !== undefined && (
               <span className="rounded bg-white/5 px-1.5 py-0.5 ring-1 ring-inset ring-white/10">
@@ -246,19 +305,63 @@ function SuggestionRow({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className={
-            copied
-              ? "inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
-              : "inline-flex shrink-0 items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[11px] font-medium text-foreground/80 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10"
-          }
-        >
-          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {canApply && (
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applyState === "applying" || applyState === "applied"}
+              className={
+                applyState === "applied"
+                  ? "inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2 py-1 text-[11px] font-medium text-emerald-200 ring-1 ring-inset ring-emerald-500/40"
+                  : applyState === "error"
+                    ? "inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-200 ring-1 ring-inset ring-rose-500/40"
+                    : "inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-2 py-1 text-[11px] font-medium text-violet-200 ring-1 ring-inset ring-violet-500/40 transition-colors hover:bg-violet-500/25 disabled:opacity-60"
+              }
+              title="Apply this fix on the WordPress site via the SEO Tool Bridge plugin"
+            >
+              {applyState === "applying" ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  Applying…
+                </>
+              ) : applyState === "applied" ? (
+                <>
+                  <Check className="size-3" />
+                  Applied
+                </>
+              ) : applyState === "error" ? (
+                <>
+                  <AlertCircle className="size-3" />
+                  Retry
+                </>
+              ) : (
+                <>
+                  <Send className="size-3" />
+                  Apply via WP
+                </>
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={
+              copied
+                ? "inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                : "inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[11px] font-medium text-foreground/80 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10"
+            }
+          >
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       </div>
+      {applyError && (
+        <p className="mt-2 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 ring-1 ring-inset ring-rose-500/30">
+          {applyError}
+        </p>
+      )}
     </div>
   );
 }
