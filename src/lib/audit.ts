@@ -439,6 +439,224 @@ function checkPage(page: FetchedPage): {
     });
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // 2026-critical per-page checks
+  // ──────────────────────────────────────────────────────────────────────
+
+  // CLS prevention: <img> without explicit width/height attributes
+  const imgNoSize = sample.filter(
+    (t) =>
+      !/\swidth\s*=\s*["']?\d/i.test(t) ||
+      !/\sheight\s*=\s*["']?\d/i.test(t),
+  ).length;
+  if (sample.length >= 3 && imgNoSize >= 3) {
+    findings.push({
+      type: "image_missing_dimensions",
+      severity: "medium",
+      url,
+      message: `${imgNoSize} images lack width/height attributes — causes layout shift (CLS) hurting Core Web Vitals.`,
+    });
+  }
+
+  // Mixed content (HTTP resources on HTTPS page)
+  if (page.finalUrl.startsWith("https://")) {
+    const httpRefs =
+      html.match(
+        /(?:src|href)\s*=\s*["']http:\/\/(?!localhost|127\.0\.0\.1)[^"']+["']/gi,
+      ) ?? [];
+    if (httpRefs.length > 0) {
+      findings.push({
+        type: "mixed_content",
+        severity: "high",
+        url,
+        message: `${httpRefs.length} insecure HTTP resource${httpRefs.length === 1 ? "" : "s"} loaded on an HTTPS page — browsers block these.`,
+      });
+    }
+  }
+
+  // Self-referencing canonical missing or wrong
+  const canonicalHref = html.match(
+    /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i,
+  )?.[1];
+  if (canonicalHref) {
+    try {
+      const canonAbs = new URL(canonicalHref, page.finalUrl).toString();
+      // Allow trailing slash difference
+      const norm = (u: string) => u.replace(/\/+$/, "").toLowerCase();
+      if (norm(canonAbs) !== norm(page.finalUrl)) {
+        findings.push({
+          type: "non_self_canonical",
+          severity: "low",
+          url,
+          message: `Canonical points elsewhere: ${canonAbs}. OK if intentional (duplicate content consolidation); fix if this should be the canonical itself.`,
+        });
+      }
+    } catch {
+      findings.push({
+        type: "invalid_canonical",
+        severity: "medium",
+        url,
+        message: `Canonical href is malformed: ${canonicalHref}`,
+      });
+    }
+  }
+
+  // X-Robots-Tag header noindex
+  const xRobots = page.headers.get("x-robots-tag") ?? "";
+  if (/\bnoindex\b/i.test(xRobots)) {
+    findings.push({
+      type: "xrobots_noindex",
+      severity: "critical",
+      url,
+      message: `X-Robots-Tag header has noindex: "${xRobots}". Page is excluded from search.`,
+    });
+  }
+
+  // Anchor text quality — flag "click here" / "read more" / "here" / "this"
+  const anchorTexts: string[] = [];
+  const anchorRe = /<a[^>]*>([\s\S]*?)<\/a>/gi;
+  let anchorMatch;
+  while ((anchorMatch = anchorRe.exec(html)) && anchorTexts.length < 300) {
+    const txt = anchorMatch[1]
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (txt) anchorTexts.push(txt);
+  }
+  const weakAnchors = anchorTexts.filter((t) =>
+    /^(click here|read more|here|this|learn more|more|link)$/i.test(t),
+  ).length;
+  if (anchorTexts.length >= 10 && weakAnchors >= 3) {
+    findings.push({
+      type: "weak_anchor_text",
+      severity: "low",
+      url,
+      message: `${weakAnchors} weak/non-descriptive anchor text${weakAnchors === 1 ? "" : "s"} ("click here", "read more"). Use descriptive anchor text — accessibility + SEO win.`,
+    });
+  }
+
+  // JavaScript-only content gap — heuristic: very low rendered text but big <script> blocks
+  // (Doesn't require a real headless re-render; flags pages that are likely SPA-rendered.)
+  const scriptBytes = (html.match(/<script[\s\S]*?<\/script>/gi) ?? []).reduce(
+    (s, t) => s + t.length,
+    0,
+  );
+  const stripped = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const textLen = stripped.length;
+  if (
+    wordCount < 80 &&
+    scriptBytes > 50_000 &&
+    textLen < 500
+  ) {
+    findings.push({
+      type: "js_rendered_only",
+      severity: "high",
+      url,
+      message: `Static HTML has very little content (${wordCount} words) but ${Math.round(scriptBytes / 1024)}KB of JS. Likely client-rendered — AI crawlers (GPTBot, ClaudeBot, PerplexityBot) don't run JS and will see a blank page.`,
+    });
+  }
+
+  // Soft-404 patterns
+  if (page.status === 200) {
+    const titleAndBody = `${title ?? ""} ${stripped.slice(0, 600)}`.toLowerCase();
+    if (
+      /\b(page not found|not found|404|doesn'?t exist|no such page|sorry,? we couldn'?t find)\b/i.test(
+        titleAndBody,
+      )
+    ) {
+      findings.push({
+        type: "soft_404",
+        severity: "high",
+        url,
+        message:
+          "Page returns 200 but content says 'not found' — soft-404. Return a real 404 status so Google de-indexes properly.",
+      });
+    }
+  }
+
+  // Render-blocking resources approximation: <script> in <head> without async/defer
+  const headMatch = html.match(/<head[^>]*>[\s\S]*?<\/head>/i);
+  const headBlock = headMatch?.[0] ?? "";
+  const blockingScripts = (
+    headBlock.match(/<script\s[^>]*src=[^>]+>/gi) ?? []
+  ).filter((s) => !/\b(async|defer|type=["']module["'])\b/i.test(s)).length;
+  if (blockingScripts >= 3) {
+    findings.push({
+      type: "render_blocking_scripts",
+      severity: "medium",
+      url,
+      message: `${blockingScripts} blocking <script src> tags in <head> without async/defer — delays first paint.`,
+    });
+  }
+
+  // Page weight — flag very heavy HTML payloads
+  if (html.length > 1_000_000) {
+    findings.push({
+      type: "heavy_html_payload",
+      severity: "medium",
+      url,
+      message: `HTML payload is ${Math.round(html.length / 1024)} KB — aim for under 500 KB. Inline a lot? Server-side render less or paginate.`,
+    });
+  }
+
+  // Twitter card completeness (Open Graph already checked)
+  const hasTwitterCard = /<meta[^>]+name=["']twitter:card["']/i.test(html);
+  const hasTwitterTitle = /<meta[^>]+name=["']twitter:title["']/i.test(html);
+  if (!hasTwitterCard || !hasTwitterTitle) {
+    findings.push({
+      type: "missing_twitter_card",
+      severity: "low",
+      url,
+      message:
+        "No <meta name='twitter:card'> — Twitter/X uses Open Graph as fallback but Twitter Cards give richer previews.",
+    });
+  }
+
+  // Article pages should have author Person schema
+  const looksLikeArticle =
+    /<article\b/i.test(html) ||
+    /"@type"\s*:\s*"(?:Article|BlogPosting|NewsArticle)"/i.test(html);
+  if (looksLikeArticle) {
+    const hasAuthor =
+      /"@type"\s*:\s*"Person"/i.test(html) ||
+      /<meta[^>]+name=["']author["']/i.test(html) ||
+      /<a[^>]+rel=["']author["']/i.test(html);
+    if (!hasAuthor) {
+      findings.push({
+        type: "article_missing_author",
+        severity: "medium",
+        url,
+        message:
+          "Article-type page has no author byline or Person schema — Google's E-E-A-T uses author entity verification in 2026. Add author + Person JSON-LD.",
+      });
+    }
+  }
+
+  // Tap target / mobile usability — check viewport zoom restriction
+  const viewportContent = html.match(
+    /<meta[^>]+name=["']viewport["'][^>]+content=["']([^"']+)["']/i,
+  )?.[1];
+  if (
+    viewportContent &&
+    /user-scalable\s*=\s*no|maximum-scale\s*=\s*1(\.0)?(?!\d)/i.test(
+      viewportContent,
+    )
+  ) {
+    findings.push({
+      type: "viewport_blocks_zoom",
+      severity: "medium",
+      url,
+      message:
+        "Viewport disables zoom — accessibility violation and Google flags it on mobile usability.",
+    });
+  }
+
   return {
     findings,
     meta: { title, description },
@@ -480,6 +698,41 @@ async function checkSiteWide(
         severity: "low",
         url: `${origin}/robots.txt`,
         message: "robots.txt exists but looks malformed or empty.",
+      });
+    }
+
+    // 2026 — explicit AI crawler policy. Most sites' robots.txt only
+    // addresses Googlebot/Bingbot. GPTBot, ClaudeBot, PerplexityBot,
+    // CCBot, Amazonbot, Applebot-Extended etc. need their own rules so
+    // the owner can decide whether to allow AI training + AI search.
+    const aiBots = [
+      "GPTBot",
+      "ClaudeBot",
+      "PerplexityBot",
+      "Google-Extended",
+      "CCBot",
+      "Amazonbot",
+      "Applebot-Extended",
+      "Bytespider",
+      "anthropic-ai",
+    ];
+    const mentioned = aiBots.filter((b) =>
+      new RegExp(`User-agent:\\s*${b}\\b`, "i").test(robotsTxt.text),
+    );
+    if (mentioned.length === 0) {
+      findings.push({
+        type: "missing_ai_crawler_policy",
+        severity: "medium",
+        url: `${origin}/robots.txt`,
+        message:
+          "robots.txt has no explicit policy for AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, etc.). Decide allow vs disallow — silence means default-allow for most, blocked for some.",
+      });
+    } else if (mentioned.length < 4) {
+      findings.push({
+        type: "partial_ai_crawler_policy",
+        severity: "low",
+        url: `${origin}/robots.txt`,
+        message: `robots.txt addresses only ${mentioned.join(", ")} — consider also ${aiBots.filter((b) => !mentioned.includes(b)).slice(0, 4).join(", ")}.`,
       });
     }
   }
@@ -596,6 +849,109 @@ async function checkSiteWide(
       severity: "low",
       url: homeUrl,
       message: `Hreflang tags exist on ${hreflangSeen} of ${pages.length} pages — usually all language variants should declare them.`,
+    });
+  }
+
+  // Hreflang reciprocity — every hreflang target must point back. Build a
+  // map: page → list of declared alternates. Then check each declared
+  // alternate has a return tag pointing to this page.
+  const hreflangMap = new Map<string, { lang: string; href: string }[]>();
+  for (const p of pages) {
+    const alts: { lang: string; href: string }[] = [];
+    const re =
+      /<link[^>]+rel=["']alternate["'][^>]+hreflang=["']([^"']+)["'][^>]+href=["']([^"']+)["']/gi;
+    let m;
+    while ((m = re.exec(p.html))) {
+      try {
+        alts.push({ lang: m[1], href: new URL(m[2], p.finalUrl).toString() });
+      } catch {
+        // ignore
+      }
+    }
+    if (alts.length > 0) hreflangMap.set(p.finalUrl, alts);
+  }
+  let nonReciprocal = 0;
+  for (const [src, alts] of hreflangMap) {
+    for (const alt of alts) {
+      const targetAlts = hreflangMap.get(alt.href);
+      if (!targetAlts) continue;
+      const points = targetAlts.some(
+        (a) => a.href.replace(/\/+$/, "") === src.replace(/\/+$/, ""),
+      );
+      if (!points) nonReciprocal++;
+    }
+  }
+  if (nonReciprocal > 0) {
+    findings.push({
+      type: "hreflang_not_reciprocal",
+      severity: "medium",
+      url: homeUrl,
+      message: `${nonReciprocal} hreflang link${nonReciprocal === 1 ? " is" : "s are"} not reciprocated — every language variant must declare ALL siblings. Google ignores non-reciprocal hreflang.`,
+    });
+  }
+
+  // Orphan pages (within the crawl window): pages no other crawled page
+  // links to. Doesn't catch true orphans (you'd need the full link graph)
+  // but flags obvious crawl-only-via-direct-URL pages.
+  const incomingLinks = new Map<string, number>();
+  for (const p of pages) {
+    const linkRe = /<a[^>]*\shref=["']([^"']+)["']/gi;
+    let lm;
+    while ((lm = linkRe.exec(p.html))) {
+      try {
+        const target = new URL(lm[1], p.finalUrl).toString().split("#")[0];
+        incomingLinks.set(target, (incomingLinks.get(target) ?? 0) + 1);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  const orphans: string[] = [];
+  for (const p of pages) {
+    if (p.finalUrl === homeUrl) continue; // homepage doesn't need incoming
+    const count = incomingLinks.get(p.finalUrl) ?? 0;
+    if (count === 0) orphans.push(p.finalUrl);
+  }
+  if (orphans.length > 0 && pages.length >= 4) {
+    findings.push({
+      type: "orphan_pages",
+      severity: "medium",
+      url: homeUrl,
+      message: `${orphans.length} page${orphans.length === 1 ? " is" : "s are"} not linked from any other page in the crawl: ${orphans.slice(0, 3).join(", ")}${orphans.length > 3 ? "…" : ""}. Add internal links so Google can crawl them.`,
+    });
+  }
+
+  // Canonical chain detection — if page A canonicalizes to B and B
+  // canonicalizes to C, Google may ignore both signals. Walk the chain.
+  const canonicalMap = new Map<string, string>();
+  for (const p of pages) {
+    const can = p.html.match(
+      /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i,
+    )?.[1];
+    if (!can) continue;
+    try {
+      const abs = new URL(can, p.finalUrl).toString();
+      if (abs !== p.finalUrl) canonicalMap.set(p.finalUrl, abs);
+    } catch {
+      // ignore
+    }
+  }
+  let chains = 0;
+  for (const [src] of canonicalMap) {
+    let cur = src;
+    let depth = 0;
+    while (canonicalMap.has(cur) && depth < 5) {
+      cur = canonicalMap.get(cur)!;
+      depth++;
+    }
+    if (depth >= 2) chains++;
+  }
+  if (chains > 0) {
+    findings.push({
+      type: "canonical_chain",
+      severity: "medium",
+      url: homeUrl,
+      message: `${chains} page${chains === 1 ? "" : "s"} canonicalize${chains === 1 ? "s" : ""} to URLs that themselves canonicalize elsewhere. Google may ignore both — fix to canonicalize directly to the final URL.`,
     });
   }
 
