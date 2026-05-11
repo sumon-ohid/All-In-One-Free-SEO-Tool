@@ -8,6 +8,8 @@ import {
   Check,
   Eye,
   EyeOff,
+  Send,
+  AlertCircle,
 } from "lucide-react";
 import { saveApiKey, saveOllamaUrl } from "./key-actions";
 import { Button } from "@/components/ui/button";
@@ -111,6 +113,12 @@ function ProviderCard({
   const [show, setShow] = useState(false);
   const [pending, startTransition] = useTransition();
   const [savedFlash, setSavedFlash] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<
+    | null
+    | { ok: true; reply: string; elapsedMs: number }
+    | { ok: false; error: string }
+  >(null);
 
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -124,10 +132,35 @@ function ProviderCard({
       }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1800);
+      // Clear any prior test result — the new key needs a fresh test
+      setTestResult(null);
       // For paid/sensitive keys, blank the field after save so we don't
       // re-display it. Keep Ollama URL visible since it's not secret.
       if (!isOllama) setValue("");
     });
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/test-provider", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: providerId ?? "ollama" }),
+      });
+      const j = (await res.json()) as
+        | { ok: true; reply: string; elapsedMs: number }
+        | { ok: false; error: string };
+      setTestResult(j);
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        error: (err as Error).message || "Network error",
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
@@ -233,7 +266,53 @@ function ProviderCard({
             )}
             {savedFlash ? "Saved" : "Save"}
           </Button>
+          {isConfigured && !value && (
+            <Button
+              type="button"
+              onClick={runTest}
+              disabled={testing}
+              size="sm"
+              variant="outline"
+              className="border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
+            >
+              {testing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+              {testing ? "Testing…" : "Test"}
+            </Button>
+          )}
         </div>
+        {testResult && (
+          <div
+            className={
+              testResult.ok
+                ? "rounded-md bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-300 ring-1 ring-inset ring-emerald-500/30"
+                : "rounded-md bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300 ring-1 ring-inset ring-rose-500/30"
+            }
+          >
+            {testResult.ok ? (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <Check className="size-3" />
+                  <strong>Working.</strong> Replied in {testResult.elapsedMs}ms:
+                </span>{" "}
+                <span className="font-mono">
+                  &quot;{testResult.reply.slice(0, 120)}&quot;
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <AlertCircle className="size-3" />
+                  <strong>Test failed.</strong>
+                </span>{" "}
+                {testResult.error}
+              </>
+            )}
+          </div>
+        )}
         <p className="text-[10px] text-muted-foreground">
           Stored locally in <code className="rounded bg-white/5 px-1 py-0.5">data.db</code>{" "}
           on this machine. You can also set environment variable{" "}

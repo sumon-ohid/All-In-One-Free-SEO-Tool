@@ -150,8 +150,9 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   let errorMsg: string | undefined;
 
   // Per-provider default model when no override is given.
+  // Updated 2026-05 — Google deprecated -latest suffix; flash models renamed.
   const defaultModel: Record<string, string> = {
-    gemini: "gemini-1.5-flash-latest",
+    gemini: "gemini-2.0-flash",
     groq: "llama-3.3-70b-versatile",
     anthropic: "claude-haiku-4-5-20251001",
     openai: "gpt-4o-mini",
@@ -331,7 +332,7 @@ type CallArgs = AiCallOptions & {
 };
 
 async function callGemini(args: CallArgs): Promise<string | null> {
-  const model = args.model || "gemini-1.5-flash-latest";
+  const model = args.model || "gemini-2.0-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(args.apiKey ?? "")}`;
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), args.timeoutMs);
@@ -353,7 +354,14 @@ async function callGemini(args: CallArgs): Promise<string | null> {
         },
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Surface the API's error message rather than silently failing —
+      // Gemini's 400 / 404 bodies contain the actionable error
+      // (invalid model, key missing scopes, etc).
+      const errBody = await res.text().catch(() => "");
+      const snippet = errBody.slice(0, 200);
+      throw new Error(`Gemini ${res.status}: ${snippet || res.statusText}`);
+    }
     const data = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
