@@ -154,19 +154,6 @@
     color: oklch(0.99 0 0);
   }
 
-  /* Guided-mode typographic scale — collapse the dozen tiny variants
-     scattered through legacy components into a tight 3-step hierarchy:
-       body    1rem    (15px) — paragraphs, primary UI
-       label   0.93rem (14px) — labels, captions, list secondary text
-       caption 0.87rem (13px) — only the rarest helper text
-     Pro mode bypasses these to keep its denser look. */
-  html:not([data-ui-mode="pro"]) .text-xs { font-size: 0.87rem; line-height: 1.5; }
-  html:not([data-ui-mode="pro"]) .text-sm { font-size: 0.96rem; line-height: 1.55; }
-  html:not([data-ui-mode="pro"]) .text-\[10px\] { font-size: 0.87rem; line-height: 1.4; }
-  html:not([data-ui-mode="pro"]) .text-\[11px\] { font-size: 0.87rem; line-height: 1.45; }
-  html:not([data-ui-mode="pro"]) .text-\[12px\] { font-size: 0.93rem; line-height: 1.5; }
-  html:not([data-ui-mode="pro"]) .text-\[13px\] { font-size: 0.93rem; line-height: 1.55; }
-  html:not([data-ui-mode="pro"]) .text-\[14px\] { font-size: 1rem; line-height: 1.55; }
 
   *:focus-visible {
     outline: 2px solid oklch(0.62 0.155 275 / 0.6);
@@ -205,15 +192,29 @@
   label {
     letter-spacing: -0.005em;
   }
-  /* Smaller text sizes need slightly tighter line-height to stay tidy */
-  .text-xs {
-    line-height: 1.5;
-  }
-  .text-\[11px\],
-  .text-\[10px\] {
-    line-height: 1.45;
-  }
 }
+
+/* ============================================================
+ * Guided-mode typographic scale — placed OUTSIDE @layer base so it
+ * has higher cascade precedence than Tailwind's utilities layer.
+ * Without this, Tailwind's text-[11px] / text-xs / etc. would always
+ * win and labels would render at their literal pixel values (which
+ * read microscopic at the 15px base). We collapse the dozen size
+ * variants scattered through the codebase into 3 readable levels:
+ *
+ *   caption  13px  — rarest helper text (text-[10/11px], text-xs)
+ *   label    14px  — labels, captions, secondary list text
+ *   body     15px  — paragraphs, primary UI (default)
+ *
+ * Pro mode bypasses this entirely to keep its denser look.
+ * ============================================================ */
+html:not([data-ui-mode="pro"]) .text-xs { font-size: 0.87rem !important; line-height: 1.5 !important; }
+html:not([data-ui-mode="pro"]) .text-sm { font-size: 0.96rem !important; line-height: 1.55 !important; }
+html:not([data-ui-mode="pro"]) .text-\[10px\],
+html:not([data-ui-mode="pro"]) .text-\[11px\] { font-size: 0.87rem !important; line-height: 1.45 !important; }
+html:not([data-ui-mode="pro"]) .text-\[12px\],
+html:not([data-ui-mode="pro"]) .text-\[13px\] { font-size: 0.93rem !important; line-height: 1.5 !important; }
+html:not([data-ui-mode="pro"]) .text-\[14px\] { font-size: 1rem !important; line-height: 1.55 !important; }
 
 @layer utilities {
   .text-gradient-brand {

@@ -47,10 +47,12 @@ REM On restart, give the old server a moment to free the port before we
 REM try to bind it. 2 seconds is more than enough for process.exit(0).
 if "%SEO_RESTART%"=="1" timeout /t 2 /nobreak >nul
 
-REM Start the dev server in a new minimized window. Window title is
-REM fixed so we can find/kill it later. We pass --port so Next.js binds
-REM to the requested port instead of auto-incrementing.
-start "SEO Tool server" /min cmd /c "%PM% dev --port %PORT%"
+REM Start the dev server fully hidden — no flashing cmd window. We use
+REM PowerShell's Start-Process -WindowStyle Hidden so there's nothing
+REM in the taskbar. Output is redirected to a log file the user can
+REM open if they need to debug. Stop the server via the in-app power
+REM widget (calls /api/shutdown) or via Task Manager (look for node.exe).
+powershell -NoProfile -Command "Start-Process -FilePath cmd -ArgumentList '/c %PM% dev --port %PORT% > dev-server.log 2>&1' -WindowStyle Hidden -WorkingDirectory '%CD%'"
 
 REM Wait for the server to come up (up to 60s) then open browser
 powershell -NoProfile -Command "for ($i=0; $i -lt 60; $i++) { try { (Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT% -TimeoutSec 1).StatusCode | Out-Null; break } catch { Start-Sleep -Seconds 1 } }"
