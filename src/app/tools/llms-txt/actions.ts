@@ -2,6 +2,7 @@
 
 import { fetchSiteMetadata } from "@/lib/site-metadata";
 import { callAI } from "@/lib/ai-call";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type GenerateLlmsResult =
   | { ok: true; content: string }
@@ -79,6 +80,12 @@ export async function generateLlmsTxt(opts: {
     .replace(/\s*```$/i, "")
     .trim();
 
+  await saveToolRun({
+    toolId: "llms-txt",
+    label: `${opts.url} · generated (${content.length} chars)`,
+    input: { url: opts.url, hint: opts.hint },
+    result: { ok: true, content },
+  }).catch(() => undefined);
   return { ok: true, content };
 }
 
@@ -135,5 +142,18 @@ export async function validateLlmsTxt(
   const sectionCount = (body.match(/^##\s+/gm) ?? []).length;
   const linkCount = (body.match(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g) ?? []).length;
 
-  return { ok: true, content: body, issues, sectionCount, linkCount };
+  const result = {
+    ok: true as const,
+    content: body,
+    issues,
+    sectionCount,
+    linkCount,
+  };
+  await saveToolRun({
+    toolId: "llms-txt",
+    label: `${llmsUrl} · ${issues.length} issues`,
+    input: { url: rawUrl },
+    result,
+  }).catch(() => undefined);
+  return result;
 }

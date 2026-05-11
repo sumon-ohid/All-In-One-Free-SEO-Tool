@@ -5,6 +5,7 @@ import {
   extractSocialPreviews,
   type SocialPreview,
 } from "@/lib/page-inspectors";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const schema = z.object({
   url: z
@@ -28,5 +29,11 @@ export async function runSocial(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid URL" };
   const r = await extractSocialPreviews(parsed.data.url);
   if (!r.ok && r.error) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "social-preview",
+    label: parsed.data.url,
+    input: parsed.data,
+    result: { ok: true, result: r },
+  }).catch(() => undefined);
   return { ok: true, result: r };
 }

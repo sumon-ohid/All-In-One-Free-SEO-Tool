@@ -1,6 +1,7 @@
 "use server";
 
 import { summarizeContent, type Summary } from "@/lib/content-ai-helpers";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type SumState =
   | { ok: true; summary: Summary }
@@ -14,5 +15,11 @@ export async function runSummarize(
   if (!text) return { ok: false, error: "Paste some content." };
   const r = await summarizeContent({ text });
   if (!r.ok) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "summarizer",
+    label: `${text.split(/\s+/).length} words → summary`,
+    input: { length: text.length },
+    result: { ok: true, summary: r.summary },
+  }).catch(() => undefined);
   return { ok: true, summary: r.summary };
 }

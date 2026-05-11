@@ -5,6 +5,7 @@ import {
   generateBulkAlt,
   type AltSuggestion,
 } from "@/lib/content-ai-helpers";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type AltState =
   | { ok: true; pageContext: string; suggestions: AltSuggestion[] }
@@ -28,6 +29,12 @@ export async function runBulkAlt(
     imageDescriptions: fetched.images,
   });
   if (!r.ok) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "bulk-alt",
+    label: `${fullUrl} · ${r.suggestions.length} alts`,
+    input: { url: fullUrl },
+    result: { ok: true, pageContext: fetched.pageContext, suggestions: r.suggestions },
+  }).catch(() => undefined);
   return {
     ok: true,
     pageContext: fetched.pageContext,

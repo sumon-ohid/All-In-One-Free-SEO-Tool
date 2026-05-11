@@ -1,5 +1,7 @@
 "use server";
 
+import { saveToolRun } from "@/lib/tool-runs";
+
 const TOXIC_TLDS = [".tk", ".ml", ".ga", ".cf", ".cn", ".ru", ".buzz", ".loan", ".xyz"];
 const TOXIC_PATTERNS = [
   /casino|porn|escort|gambling|cialis|viagra|payday|crypto-?airdrop|forex-?signal/i,
@@ -87,8 +89,8 @@ export async function runDisavow(
     `# Submit at https://search.google.com/search-console/disavow-links\n\n` +
     uniqDomains.map((d) => `domain:${d}`).join("\n");
 
-  return {
-    ok: true,
+  const result = {
+    ok: true as const,
     rows,
     output,
     stats: {
@@ -97,4 +99,11 @@ export async function runDisavow(
       reviewed: rows.filter((r) => !r.toxic && r.domain).length,
     },
   };
+  await saveToolRun({
+    toolId: "disavow",
+    label: `${result.stats.total} input · ${result.stats.toxic} toxic · ${uniqDomains.length} disavowed`,
+    input: { mode, count: lines.length },
+    result,
+  }).catch(() => undefined);
+  return result;
 }

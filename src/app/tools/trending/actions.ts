@@ -5,6 +5,7 @@ import {
   findTrendingIdeas,
   type TrendingResult,
 } from "@/lib/trending-ideas";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const inputSchema = z.object({
   topic: z.string().trim().min(2).max(120),
@@ -31,5 +32,11 @@ export async function runTrending(
     country: parsed.data.country,
   });
   if (!r.ok && r.error) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "trending",
+    label: `${parsed.data.topic} (${parsed.data.country})`,
+    input: parsed.data,
+    result: { ok: true, result: r },
+  }).catch(() => undefined);
   return { ok: true, result: r };
 }

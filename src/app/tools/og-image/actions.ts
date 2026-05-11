@@ -1,6 +1,7 @@
 "use server";
 
 import { generateOgImage, type OgTemplate } from "@/lib/og-image";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type OgState =
   | { ok: true; dataUrl: string }
@@ -29,5 +30,12 @@ export async function runOgImage(
   });
 
   if (!r.ok || !r.dataUrl) return { ok: false, error: r.error ?? "Generation failed" };
+  // Don't persist the data URL — it can be 1 MB+. Just metadata.
+  await saveToolRun({
+    toolId: "og-image",
+    label: `${template} · ${title.slice(0, 60)}`,
+    input: { template, brand, brandColor, title, subtitle },
+    result: { ok: true, dataUrlBytes: r.dataUrl.length },
+  }).catch(() => undefined);
   return { ok: true, dataUrl: r.dataUrl };
 }

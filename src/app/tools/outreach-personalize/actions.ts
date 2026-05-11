@@ -5,6 +5,7 @@ import {
   personalizeOutreach,
   type PersonalizeResult,
 } from "@/lib/outreach-personalizer";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const inputSchema = z.object({
   prospectUrl: z
@@ -42,5 +43,11 @@ export async function runPersonalize(
   }
   const r = await personalizeOutreach(parsed.data);
   if (!r.ok) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "outreach-personalize",
+    label: parsed.data.prospectUrl,
+    input: { prospectUrl: parsed.data.prospectUrl, goal: parsed.data.goal },
+    result: { ok: true, result: r },
+  }).catch(() => undefined);
   return { ok: true, result: r };
 }

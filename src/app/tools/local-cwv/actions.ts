@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { measureCwv, type CwvResult } from "@/lib/local-cwv";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const inputSchema = z.object({
   url: z
@@ -33,6 +34,12 @@ export async function runLocalCwv(
       device: parsed.data.device,
     });
     if (!result.ok && result.error) return { ok: false, error: result.error };
+    await saveToolRun({
+      toolId: "local-cwv",
+      label: `${parsed.data.url} · ${parsed.data.device}`,
+      input: parsed.data,
+      result: { ok: true, result },
+    }).catch(() => undefined);
     return { ok: true, result };
   } catch (err) {
     return {

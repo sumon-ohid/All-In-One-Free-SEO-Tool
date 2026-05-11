@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { findSoft404s, type Soft404Result } from "@/lib/soft-404-catcher";
+import { saveToolRun } from "@/lib/tool-runs";
 
 const schema = z.object({
   startUrl: z
@@ -29,5 +30,11 @@ export async function runSoft404(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   const r = await findSoft404s(parsed.data);
   if (!r.ok && r.error) return { ok: false, error: r.error };
+  await saveToolRun({
+    toolId: "soft-404",
+    label: parsed.data.startUrl,
+    input: parsed.data,
+    result: { ok: true, result: r },
+  }).catch(() => undefined);
   return { ok: true, result: r };
 }

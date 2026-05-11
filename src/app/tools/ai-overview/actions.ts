@@ -2,6 +2,7 @@
 
 import { fetchSiteMetadata } from "@/lib/site-metadata";
 import { callAI } from "@/lib/ai-call";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type AiOverviewAnalysis =
   | {
@@ -139,8 +140,8 @@ export async function analyzeAiOverview(
     return { ok: false, error: "Model output wasn't valid JSON." };
   }
 
-  return {
-    ok: true,
+  const result = {
+    ok: true as const,
     url,
     title: page.title,
     description: page.description,
@@ -153,4 +154,11 @@ export async function analyzeAiOverview(
     weaknesses: (parsed.weaknesses ?? []).map(String).slice(0, 6),
     improvements: (parsed.improvements ?? []).map(String).slice(0, 6),
   };
+  await saveToolRun({
+    toolId: "ai-overview",
+    label: `${url} · citation ${result.citationScore}/100`,
+    input: { url },
+    result,
+  }).catch(() => undefined);
+  return result;
 }

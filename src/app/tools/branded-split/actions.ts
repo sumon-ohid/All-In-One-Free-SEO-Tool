@@ -1,6 +1,7 @@
 "use server";
 
 import { fetchGscPerformance } from "@/lib/google-oauth";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type BrandedRow = {
   query: string;
@@ -115,8 +116,8 @@ export async function runSplit(
       else prevNonBranded += r.clicks;
     }
 
-    return {
-      ok: true,
+    const result = {
+      ok: true as const,
       rows,
       summary: {
         brandedClicks,
@@ -133,6 +134,13 @@ export async function runSplit(
         prevNonBrandedClicks: prevNonBranded,
       },
     };
+    await saveToolRun({
+      toolId: "branded-split",
+      label: `${site} · branded ${brandedClicks} / non-branded ${nonBrandedClicks}`,
+      input: { site, brandTerms },
+      result,
+    }).catch(() => undefined);
+    return result;
   } catch (err) {
     return { ok: false, error: (err as Error).message ?? "GSC fetch failed" };
   }

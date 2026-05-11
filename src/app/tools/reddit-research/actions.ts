@@ -1,5 +1,7 @@
 "use server";
 
+import { saveToolRun } from "@/lib/tool-runs";
+
 export type RedditPost = {
   title: string;
   url: string;
@@ -128,5 +130,12 @@ export async function searchReddit(opts: {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  return { ok: true, query: opts.query, posts, questions, topSubreddits };
+  const result = { ok: true as const, query: opts.query, posts, questions, topSubreddits };
+  await saveToolRun({
+    toolId: "reddit-research",
+    label: `${opts.query} · ${posts.length} posts · ${topSubreddits.length} subs`,
+    input: { query: opts.query },
+    result,
+  }).catch(() => undefined);
+  return result;
 }

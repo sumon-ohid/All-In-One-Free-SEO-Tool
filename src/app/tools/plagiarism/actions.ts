@@ -1,6 +1,7 @@
 "use server";
 
 import { callAI } from "@/lib/ai-call";
+import { saveToolRun } from "@/lib/tool-runs";
 
 export type PlagiarismCheck = {
   ok: true;
@@ -86,7 +87,7 @@ Return up to 5 flags. If the content is high-originality, flags can be empty.`;
       verdict: string;
       flags?: { snippet: string; reason: string }[];
     };
-    return {
+    const result: PlagiarismCheck = {
       ok: true,
       aiLikelihood: clamp(parsed.aiLikelihood, 0, 100),
       originalityScore: clamp(parsed.originalityScore, 0, 100),
@@ -120,6 +121,13 @@ Return up to 5 flags. If the content is high-originality, flags can be empty.`;
         },
       ],
     };
+    await saveToolRun({
+      toolId: "plagiarism",
+      label: `AI ${result.aiLikelihood}/100 · originality ${result.originalityScore}/100`,
+      input: { length: text.length },
+      result,
+    }).catch(() => undefined);
+    return result;
   } catch {
     return {
       ok: false,
