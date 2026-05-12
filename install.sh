@@ -281,49 +281,143 @@ EOM
   fi
 fi
 
-# ---- 5. desktop welcome file ------------------------------------------------
+# ---- 5. desktop shortcut (.desktop for Linux; alias for macOS) -------------
+if [ -d "$DESKTOP" ] && [ "$HAS_DOCKER" != "1" ]; then
+  OS="$(uname -s)"
+  if [ "$OS" = "Linux" ]; then
+    SHORTCUT="$DESKTOP/SEO-Tool.desktop"
+    cat > "$SHORTCUT" <<EOF
+[Desktop Entry]
+Type=Application
+Name=SEO Tool
+Comment=Self-hosted SEO platform by DiceCodes
+Exec=$DIR/seo.sh
+Path=$DIR
+Terminal=false
+Categories=Network;Office;
+EOF
+    chmod +x "$SHORTCUT" 2>/dev/null || true
+    say "Created desktop shortcut: $SHORTCUT"
+  elif [ "$OS" = "Darwin" ]; then
+    # macOS: create a clickable .command file (Terminal will run it)
+    SHORTCUT="$DESKTOP/SEO Tool.command"
+    cat > "$SHORTCUT" <<EOF
+#!/bin/bash
+cd "$DIR" && ./seo.sh
+EOF
+    chmod +x "$SHORTCUT" 2>/dev/null || true
+    say "Created desktop launcher: $SHORTCUT"
+  fi
+fi
+
+# ---- 6. comprehensive desktop welcome file ---------------------------------
 WELCOME="$DESKTOP/SEO-Tool-Welcome.txt"
 if [ -d "$DESKTOP" ]; then
   {
     echo "======================================================"
-    echo "   SEO TOOL — INSTALLED"
+    echo "   SEO TOOL — INSTALLED SUCCESSFULLY"
+    echo "   Built by DiceCodes (https://dicecodes.com)"
     echo "======================================================"
     echo ""
     echo "Open the app:        http://localhost:$PORT"
     echo "Install location:    $DIR"
     echo ""
+    echo "You can find this guide on your Desktop any time."
+    echo ""
     echo "----------------------- FIRST 5 MIN ------------------"
     echo "1. Open http://localhost:$PORT"
-    echo "2. Add a client at /clients/new (paste any domain)"
+    echo "2. Add a client at /clients/new (paste any domain — it'll"
+    echo "   auto-detect the tech stack and niche)"
     echo "3. Pick an AI provider at /settings:"
-    echo "     - Local Ollama (free, private)  OR"
-    echo "     - Anthropic / OpenAI / Groq / Gemini (paste API key)"
+    echo "     - Local Ollama (free, private, fully offline)  OR"
+    echo "     - Gemini / Groq / OpenRouter / DeepSeek (free tiers, paste key)  OR"
+    echo "     - OpenAI / Anthropic (paid, BYO key)"
     echo "4. Run your first audit"
-    echo "5. Tomorrow: the daily agent kicks in automatically"
+    echo "5. Tomorrow: the daily AI agent kicks in automatically and runs ~17"
+    echo "   automated jobs per client (rank checks, audit deltas, content"
+    echo "   decay, backlink scans, GBP monitoring, alerts)."
+    echo ""
+    echo "----------------------- WHERE EVERYTHING LIVES -------"
+    if [ "$HAS_DOCKER" = "1" ]; then
+      echo "$DIR/"
+      echo "  docker-compose.yml          <- service definition"
+      echo "  Dockerfile                  <- image build"
+      echo "  data.db                     <- (lives in /data on the seo-data volume)"
+    else
+      echo "$DIR/"
+      echo "  seo.sh                      <- run this to start/stop (or double-click the shortcut)"
+      echo "  data.db                     <- your SQLite database (clients, keywords, audits — back this up)"
+      echo "  .seo-encryption-key         <- AES key that decrypts your API keys (back this up too)"
+      echo "  .env.local                  <- env config (APP_PASSWORD, custom env vars)"
+      echo "  dev-server.log              <- runtime log (tail this for errors)"
+      echo "  .dev-server.pid             <- PID of the running server"
+      echo "  screenshots/                <- SERP screenshots from rank checks"
+      echo "  README.md                   <- full feature list + install + license"
+      echo "  TROUBLESHOOTING.md          <- 12-section support doc"
+      echo "  docs/HOSTING.md             <- production hosting guides"
+      echo "  ROADMAP.md                  <- what's coming next"
+      echo "  wordpress-plugin/           <- companion WordPress plugin"
+    fi
     echo ""
     echo "----------------------- CONTROLS ---------------------"
     if [ "$HAS_DOCKER" = "1" ]; then
-      echo "Stop:    cd $DIR && docker compose down"
-      echo "Start:   cd $DIR && SEO_HOST_PORT=$PORT docker compose up -d"
-      echo "Logs:    cd $DIR && docker compose logs -f"
-      echo "Update:  Re-run the installer command"
+      echo "Start:    cd $DIR && SEO_HOST_PORT=$PORT docker compose up -d"
+      echo "Stop:     cd $DIR && docker compose down"
+      echo "Restart:  cd $DIR && docker compose restart"
+      echo "Logs:     cd $DIR && docker compose logs -f"
+      echo "Status:   cd $DIR && docker compose ps"
+      echo "Update:   Re-run the installer command"
+      echo "Backup:   Settings -> Backup & restore -> Download backup"
     else
-      echo "Stop:    kill \$(cat $DIR/.dev-server.pid)"
-      echo "Start:   cd $DIR && ./seo.sh    (or: PORT=$PORT pnpm start:daily)"
-      echo "Logs:    tail -f $DIR/dev-server.log"
-      echo "Update:  Re-run the installer command"
+      echo "Start:    Double-click the SEO Tool shortcut on your Desktop"
+      echo "          (or: cd $DIR && ./seo.sh)"
+      echo "Stop:     In the app -> profile menu -> System health -> Shutdown"
+      echo "          (or: kill \$(cat $DIR/.dev-server.pid))"
+      echo "Restart:  In the app -> profile menu -> Restart server"
+      echo "Logs:     tail -f $DIR/dev-server.log"
+      echo "Update:   Re-run the installer command"
+      echo "Backup:   Settings -> Backup & restore -> Download backup"
     fi
     echo ""
     echo "----------------------- TROUBLESHOOT -----------------"
     echo "Blank page?       Server still building — wait 30-60s and refresh."
-    echo "Want a password?  Set APP_PASSWORD=yourpassword in $DIR/.env.local"
-    echo "                  then restart."
-    echo "Port conflict?    SEO_PORT=4000 (any free port) before re-running."
+    echo "Port conflict?    Installer auto-tries 3001-3010, 8080-81, 4000, 5000."
+    echo "                  Force a port: SEO_PORT=4000 before re-running."
+    echo "Want a password?  Set APP_PASSWORD=yourpassword in $DIR/.env.local then restart."
+    echo "LAN access?       Default binds to 127.0.0.1 only. To expose on your LAN,"
+    echo "                  set APP_PASSWORD (required) AND SEO_BIND_HOST=0.0.0.0"
+    echo "                  in $DIR/.env.local, then restart."
+    echo "Forgot password?  Edit $DIR/.env.local, remove APP_PASSWORD line, restart."
+    echo "Full guide:       $DIR/TROUBLESHOOTING.md (12 sections, covers most issues)"
     echo ""
-    echo "----------------------- DOCS -------------------------"
-    echo "Repo:     https://github.com/IamRamgarhia/SEO-Tool"
-    echo "Hosting:  $DIR/docs/HOSTING.md"
-    echo "README:   $DIR/README.md"
+    echo "----------------------- DAILY USE --------------------"
+    echo "The fastest way to launch every day:"
+    if [ "$HAS_DOCKER" = "1" ]; then
+      echo "   docker compose up -d in $DIR"
+    else
+      echo "   Double-click the SEO Tool shortcut on your Desktop."
+    fi
+    echo ""
+    echo "Your data NEVER leaves this machine. No telemetry. No phone-home."
+    echo "The only outbound network calls are:"
+    echo "   - Google's free APIs (GSC, GA4, PageSpeed) — only when you connect them"
+    echo "   - Your chosen AI provider (only when you run AI features)"
+    echo "   - SERP scraping via headless browser (only when checking rankings)"
+    echo ""
+    echo "----------------------- HELP -------------------------"
+    echo "Repo + issues:    https://github.com/IamRamgarhia/SEO-Tool"
+    echo "Troubleshooting:  $DIR/TROUBLESHOOTING.md"
+    echo "Hosting guides:   $DIR/docs/HOSTING.md"
+    echo "README:           $DIR/README.md"
+    echo "Email support:    Contact@dicecodes.com"
+    echo ""
+    echo "----------------------- SUPPORT THIS PROJECT ---------"
+    echo "This tool is free. If it saves you the cost of an Ahrefs or"
+    echo "Semrush subscription, the cheapest way to say thanks:"
+    echo "   - Star the repo: https://github.com/IamRamgarhia/SEO-Tool"
+    echo "   - UPI (India): princeramgarhiaa-1@okaxis"
+    echo "     (Open the app -> Support button -> QR code with presets)"
+    echo "   - PayPal: https://www.paypal.com/donate/?business=princeramgarhiaa@gmail.com"
     echo ""
     echo "======================================================"
   } > "$WELCOME"

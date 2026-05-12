@@ -47,7 +47,12 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3"
+      "better-sqlite3",
+      "esbuild",
+      "msw",
+      "sharp",
+      "tesseract.js",
+      "unrs-resolver"
     ]
   },
   "dependencies": {

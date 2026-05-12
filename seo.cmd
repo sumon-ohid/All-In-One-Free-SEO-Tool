@@ -49,6 +49,28 @@ if %errorlevel%==0 (
 REM On restart, give the old server a moment to free the port.
 if "%SEO_RESTART%"=="1" timeout /t 2 /nobreak >nul
 
+REM ---- 3b. Is the saved port occupied by SOMETHING ELSE (not us)?
+REM     If so, walk through the fallback list and pick the first free port.
+REM     Handles the case where the user installed on 3000, closed the tool,
+REM     then started another dev server on 3000 — instead of failing, we
+REM     just pick 3001 (or 3002, etc.) and remember it for next time.
+powershell -NoProfile -Command "if ((Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }"
+if %errorlevel%==0 (
+  echo Port %PORT% is occupied by another process. Picking a free fallback port...
+  for %%p in (3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 8080 8081 4000 5000) do (
+    powershell -NoProfile -Command "if ((Get-NetTCPConnection -LocalPort %%p -State Listen -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }"
+    if errorlevel 1 (
+      set "PORT=%%p"
+      echo   ^> using port %%p
+      echo %%p> .seo-port
+      goto :port_found
+    )
+  )
+  echo No free port found. Set PORT manually before re-running.
+  exit /b 1
+)
+:port_found
+
 REM ---- 4. Pick mode. Production if a build exists, dev otherwise.
 set "RUN_CMD=dev"
 if exist ".next\BUILD_ID" if not "%SEO_FORCE_DEV%"=="1" set "RUN_CMD=start:daily"

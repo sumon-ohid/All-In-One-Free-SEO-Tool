@@ -47,6 +47,33 @@ fi
 # Restart? Give the old server a beat to free the port.
 [ "$SEO_RESTART" = "1" ] && sleep 2
 
+# ---- 3b. Is the saved port occupied by SOMETHING ELSE (not us)?
+#         If so, walk through the fallback list and use the first free port.
+port_in_use() {
+  local p="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -i :"$p" -sTCP:LISTEN >/dev/null 2>&1
+  elif command -v ss >/dev/null 2>&1; then
+    ss -lnt "( sport = :$p )" 2>/dev/null | grep -q LISTEN
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -an 2>/dev/null | grep -q "[\.:]$p .*LISTEN"
+  else
+    return 1
+  fi
+}
+
+if port_in_use "$PORT"; then
+  echo "Port $PORT is occupied by another process. Picking a free fallback port..."
+  for try in 3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 8080 8081 4000 5000; do
+    if ! port_in_use "$try"; then
+      PORT="$try"
+      echo "  > using port $PORT"
+      echo "$PORT" > .seo-port
+      break
+    fi
+  done
+fi
+
 # ---- 4. Stop any prior server we own (idempotent re-run)
 if [ -f ".dev-server.pid" ]; then
   OLD_PID="$(cat .dev-server.pid 2>/dev/null || true)"

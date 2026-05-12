@@ -293,56 +293,155 @@ $pm run $runScript
     }
 }
 
-# ---- 5. write desktop welcome file -----------------------------------------
+# ---- 5. desktop shortcut (.lnk) so the user can launch with a double-click
+if ((Test-Path $desktop) -and (-not $hasDocker)) {
+    try {
+        $shortcutPath = Join-Path $desktop "SEO Tool.lnk"
+        $wshShell = New-Object -ComObject WScript.Shell
+        $sc = $wshShell.CreateShortcut($shortcutPath)
+        $sc.TargetPath = Join-Path $dir "seo.cmd"
+        $sc.WorkingDirectory = $dir
+        $sc.Description = "Launch the SEO Tool (DiceCodes)"
+        # Use the bundled favicon if present
+        $iconCandidates = @(
+            (Join-Path $dir "public\favicon.ico"),
+            (Join-Path $dir "public\icon.ico")
+        )
+        foreach ($ic in $iconCandidates) {
+            if (Test-Path $ic) { $sc.IconLocation = $ic; break }
+        }
+        $sc.Save()
+        Say "Created desktop shortcut: $shortcutPath"
+    } catch {
+        Warn "Couldn't create desktop shortcut: $($_.Exception.Message)"
+    }
+}
+
+# ---- 6. write a comprehensive desktop welcome file -------------------------
 $welcome = Join-Path $desktop "SEO-Tool-Welcome.txt"
 if (Test-Path $desktop) {
     $controls = if ($hasDocker) {
 @"
-Stop:    cd '$dir'; docker compose down
-Start:   cd '$dir'; `$env:SEO_HOST_PORT='$port'; docker compose up -d
-Logs:    cd '$dir'; docker compose logs -f
-Update:  Re-run the installer command
+Start:    cd "$dir"; `$env:SEO_HOST_PORT='$port'; docker compose up -d
+Stop:     cd "$dir"; docker compose down
+Restart:  cd "$dir"; docker compose restart
+Logs:     cd "$dir"; docker compose logs -f
+Status:   cd "$dir"; docker compose ps
+Update:   Re-run the installer command (one-liner from README)
+Backup:   Settings -> Backup & restore -> Download backup
 "@
     } else {
 @"
-Stop:    Get-Process -Id (Get-Content '$dir\.dev-server.pid') | Stop-Process
-Start:   cd '$dir'; .\seo.cmd     (or: ``$env:PORT='$port'; pnpm start:daily``)
-Logs:    Get-Content '$dir\dev-server.log' -Wait -Tail 100
-Update:  Re-run the installer command
+Start:    Double-click the "SEO Tool" shortcut on your desktop
+          (or: cd "$dir"; .\seo.cmd)
+Stop:     In the app -> profile menu -> System health -> Shutdown server
+          (or: Get-Process -Id (Get-Content "$dir\.dev-server.pid") | Stop-Process)
+Restart:  In the app -> profile menu -> Restart server (top-right power icon)
+Logs:     Get-Content "$dir\dev-server.log" -Wait -Tail 100
+Update:   Re-run the installer command (one-liner from README)
+Backup:   Settings -> Backup & restore -> Download backup
+"@
+    }
+
+    $folderLayout = if ($hasDocker) {
+@"
+$dir\
+  docker-compose.yml          <- service definition
+  Dockerfile                  <- image build
+  data.db                     <- (lives in /data inside the named volume "seo-data")
+"@
+    } else {
+@"
+$dir\
+  seo.cmd                     <- DOUBLE-CLICK to start/stop the server
+  data.db                     <- your SQLite database (clients, keywords, audits, reports — back this up)
+  .seo-encryption-key         <- AES key that decrypts your API keys (back this up too)
+  .env.local                  <- env config (APP_PASSWORD, custom env vars)
+  dev-server.log              <- runtime log (tail this for errors)
+  .dev-server.pid             <- PID of the running server
+  screenshots\                <- SERP screenshots from rank checks
+  data\screenshots\           <- same, when run via Docker
+  README.md                   <- full feature list + install + license
+  TROUBLESHOOTING.md          <- 12-section support doc
+  docs\HOSTING.md             <- production hosting guides (Hetzner, Railway, etc)
+  ROADMAP.md                  <- what's coming next
+  wordpress-plugin\           <- companion WordPress plugin (.zip and install)
 "@
     }
 
     $content = @"
 ======================================================
-   SEO TOOL - INSTALLED
+   SEO TOOL - INSTALLED SUCCESSFULLY
+   Built by DiceCodes (https://dicecodes.com)
 ======================================================
 
 Open the app:        http://localhost:$port
 Install location:    $dir
 
+You can find this guide on your Desktop any time.
+
 ----------------------- FIRST 5 MIN ------------------
 1. Open http://localhost:$port
-2. Add a client at /clients/new (paste any domain)
+2. Add a client at /clients/new (paste any domain — it'll
+   auto-detect the tech stack and niche)
 3. Pick an AI provider at /settings:
-     - Local Ollama (free, private)  OR
-     - Anthropic / OpenAI / Groq / Gemini (paste API key)
+     - Local Ollama (free, private, fully offline)  OR
+     - Gemini / Groq / OpenRouter / DeepSeek (free tiers, paste key)  OR
+     - OpenAI / Anthropic (paid, BYO key)
 4. Run your first audit
-5. Tomorrow: the daily agent kicks in automatically
+5. Tomorrow: the daily AI agent kicks in automatically and runs ~17
+   automated jobs per client (rank checks, audit deltas, content
+   decay, backlink scans, GBP monitoring, alerts).
+
+----------------------- WHERE EVERYTHING LIVES -------
+$folderLayout
 
 ----------------------- CONTROLS ---------------------
 $controls
 
 ----------------------- TROUBLESHOOT -----------------
-Blank page?       Server still building - wait 30-60s and refresh.
-Want a password?  Set APP_PASSWORD=yourpassword in $dir\.env.local
-                  then restart.
-Port conflict?    `$env:SEO_PORT='4000' (or any free port) before
+Blank page?       Server still building — wait 30-60s and refresh.
+Port conflict?    The installer auto-tries 3001-3010, 8080-81, 4000, 5000.
+                  If it picked a different port than 3000, this guide shows it
+                  at the top. To force a port: `$env:SEO_PORT='4000' before
                   re-running the installer.
+Want a password?  Set APP_PASSWORD=yourpassword in $dir\.env.local then restart.
+LAN access?       Default binds to 127.0.0.1 only. To expose on your LAN,
+                  set APP_PASSWORD (required) AND SEO_BIND_HOST=0.0.0.0
+                  in $dir\.env.local, then restart.
+Backup/Restore?   Settings -> Backup & restore in the app.
+Forgot password?  Edit $dir\.env.local, remove the APP_PASSWORD line, restart.
+Full guide:       $dir\TROUBLESHOOTING.md (12 sections, covers most issues)
 
------------------------ DOCS -------------------------
-Repo:     https://github.com/IamRamgarhia/SEO-Tool
-Hosting:  $dir\docs\HOSTING.md
-README:   $dir\README.md
+----------------------- DAILY USE --------------------
+The fastest way to launch every day:
+   Double-click the "SEO Tool" shortcut on your desktop.
+
+The app auto-opens in your browser. If the port is already serving
+(you opened it earlier), the launcher just opens a new tab.
+
+Your data NEVER leaves this machine. No telemetry. No phone-home.
+The only outbound network calls are:
+   - Google's free APIs (GSC, GA4, PageSpeed) — only when you connect them
+   - Your chosen AI provider (only when you run AI features)
+   - SERP scraping via headless browser (only when you check rankings)
+
+----------------------- HELP -------------------------
+Repo + issues:    https://github.com/IamRamgarhia/SEO-Tool
+Troubleshooting:  $dir\TROUBLESHOOTING.md
+Hosting guides:   $dir\docs\HOSTING.md
+README:           $dir\README.md
+Email support:    Contact@dicecodes.com
+
+----------------------- SUPPORT THIS PROJECT ---------
+This tool is free and self-hosted. If it saves you the cost of
+an Ahrefs or Semrush subscription:
+   - Star the repo (huge impact, zero cost):
+     https://github.com/IamRamgarhia/SEO-Tool
+   - UPI (India): princeramgarhiaa-1@okaxis
+     (Open the app -> click the Support button for QR + presets)
+   - PayPal (international):
+     https://www.paypal.com/donate/?business=princeramgarhiaa@gmail.com
 
 ======================================================
 "@
@@ -350,7 +449,7 @@ README:   $dir\README.md
     Say "Created Desktop guide: $welcome"
 }
 
-# ---- 6. auto-open browser ---------------------------------------------------
+# ---- 7. auto-open browser ---------------------------------------------------
 $url = "http://localhost:$port"
 if ($up) {
     Say "Opening browser"
