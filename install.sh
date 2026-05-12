@@ -223,11 +223,42 @@ EOM
     exit 1
   fi
 
-  NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null)
+  NODE_FULL_VERSION="$(node -v 2>/dev/null | sed 's/^v//')"
+  NODE_MAJOR="$(echo "$NODE_FULL_VERSION" | cut -d. -f1)"
+
   if [ "$NODE_MAJOR" -lt 20 ]; then
-    die "Node $NODE_MAJOR detected. Need Node 20+. Upgrade at https://nodejs.org/"
+    die "Node $NODE_FULL_VERSION is too old. This installer needs Node 22 LTS. Install: see https://nodejs.org/"
   fi
-  say "Node $(node -v) ✓"
+
+  if [ "$NODE_MAJOR" -gt 22 ] && [ "$SEO_ALLOW_NEW_NODE" != "1" ]; then
+    die "$(cat <<MSG
+Node $NODE_FULL_VERSION is too new (major version $NODE_MAJOR).
+
+This app's dependencies (better-sqlite3, sharp, tesseract.js) don't yet
+ship prebuilt binaries for Node $NODE_MAJOR. Compiling from source needs
+a C++ toolchain that's often missing.
+
+The reliable fix is to use Node 22 LTS (supported until April 2027).
+It has prebuilts for every native module we use - install completes in
+2 minutes, zero C++ tools needed.
+
+To install Node 22 LTS:
+
+  macOS:    brew uninstall --ignore-dependencies node && brew install node@22
+            (or use nvm: nvm install 22 && nvm use 22)
+
+  Linux:    nvm install 22 && nvm use 22
+            (or via your package manager - many distros default to LTS)
+
+After installing, open a NEW terminal and re-run this installer.
+
+If you really want to use Node $NODE_MAJOR and have a C++ toolchain
+installed, re-run with: SEO_ALLOW_NEW_NODE=1 <installer command>
+MSG
+)"
+  fi
+
+  say "Node $NODE_FULL_VERSION detected - supported."
 
   # Package manager — prefer pnpm via corepack
   if command -v pnpm >/dev/null 2>&1; then
@@ -254,9 +285,9 @@ EOM
   export NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true
   export NPM_CONFIG_AUTO_APPROVE_BUILDS=true
 
-  say "Installing dependencies (1-3 min the first time). Output streams below."
+  say "Installing dependencies (1-2 min first time, ~15s on re-runs)."
   INSTALL_OK=0
-  $PM install --ignore-scripts && INSTALL_OK=1
+  $PM install --ignore-scripts --prefer-offline && INSTALL_OK=1
 
   if [ "$INSTALL_OK" != "1" ]; then
     warn "pnpm install --ignore-scripts failed. Wiping node_modules + lockfile..."
@@ -283,46 +314,40 @@ EOM
   find_sqlite_binding() {
     find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1
   }
+  # Find the better-sqlite3 package dir. MUST exclude @types/better-sqlite3
+  # (TypeScript type defs, no native code).
   find_sqlite_pkg_dir() {
-    find node_modules -path '*/better-sqlite3/package.json' -type f 2>/dev/null | head -1 | xargs -I {} dirname {}
+    find node_modules -path '*/better-sqlite3/package.json' -type f 2>/dev/null \
+      | grep -v '@types' \
+      | head -1 \
+      | xargs -I {} dirname {}
   }
 
   say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
 
-  # Strategy 1: pnpm rebuild --force
-  say "  [1/4] pnpm rebuild --force"
-  $PM rebuild --force || true
+  # Strategy 1: pnpm install --force re-runs build scripts. pnpm 11+ does
+  # NOT support --force on the `rebuild` command - that's why our prior
+  # attempt failed. `install --force` is the correct call.
+  say "  [1/3] pnpm install --force (re-runs build scripts)"
+  $PM install --force || true
 
   SQLITE_BINDING="$(find_sqlite_binding)"
 
   if [ -z "$SQLITE_BINDING" ]; then
-    # Strategy 2: targeted rebuild of just better-sqlite3
-    warn "  Binding still missing. [2/4] pnpm rebuild better-sqlite3 --force"
-    $PM rebuild --force better-sqlite3 || true
-    SQLITE_BINDING="$(find_sqlite_binding)"
-  fi
-
-  if [ -z "$SQLITE_BINDING" ]; then
-    # Strategy 3: cd into package, run prebuild-install directly
     PKG_DIR="$(find_sqlite_pkg_dir)"
     if [ -n "$PKG_DIR" ]; then
-      warn "  [3/4] Running prebuild-install directly inside $PKG_DIR"
-      (cd "$PKG_DIR" && {
-        if [ -x "node_modules/.bin/prebuild-install" ]; then
-          node_modules/.bin/prebuild-install || true
-        else
-          npx --yes prebuild-install || true
-        fi
-      })
+      warn "  [2/3] prebuild-install inside $PKG_DIR"
+      (cd "$PKG_DIR" && npx --yes prebuild-install || true)
       SQLITE_BINDING="$(find_sqlite_binding)"
+    else
+      warn "  Could not find the better-sqlite3 package directory!"
     fi
   fi
 
   if [ -z "$SQLITE_BINDING" ]; then
-    # Strategy 4: cd into package, run npm rebuild (node-gyp, needs toolchain)
     PKG_DIR="$(find_sqlite_pkg_dir)"
     if [ -n "$PKG_DIR" ]; then
-      warn "  [4/4] npm rebuild inside $PKG_DIR (needs C++ toolchain)"
+      warn "  [3/3] npm rebuild inside $PKG_DIR (needs C++ toolchain)"
       (cd "$PKG_DIR" && npm rebuild || true)
       SQLITE_BINDING="$(find_sqlite_binding)"
     fi

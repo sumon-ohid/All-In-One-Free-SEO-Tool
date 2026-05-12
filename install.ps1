@@ -229,11 +229,58 @@ Or, if you have winget (Windows 10+):
 "@
     }
 
-    $nodeMajor = [int](node -p "process.versions.node.split('.')[0]" 2>$null)
+    $nodeFullVersion = (node -v 2>$null) -replace '^v', ''
+    $nodeMajor = [int]($nodeFullVersion -split '\.')[0]
+
     if ($nodeMajor -lt 20) {
-        Die "Node $nodeMajor detected. Need Node 20+. Upgrade at https://nodejs.org/"
+        Die @"
+Node $nodeFullVersion is too old. This installer needs Node 22 LTS.
+
+Quick fix (one command):
+  winget install OpenJS.NodeJS.LTS
+
+After that, CLOSE this PowerShell window, open a NEW one, and re-run
+this installer.
+"@
     }
-    Say "Node $(node -v) ok"
+
+    if ($nodeMajor -gt 22 -and $env:SEO_ALLOW_NEW_NODE -ne "1") {
+        Die @"
+Node $nodeFullVersion is too new (major version $nodeMajor).
+
+This app's dependencies (better-sqlite3, sharp, tesseract.js) don't yet
+ship prebuilt binaries for Node $nodeMajor. Trying to compile them from
+source requires installing a 3 GB C++ toolchain - and even then it
+often fails on cutting-edge Node versions.
+
+The reliable fix is to use Node 22 LTS (the current Long Term Support
+release, supported until April 2027). It has prebuilts for every native
+module we use - install completes in 2 minutes, zero C++ tools needed.
+
+ONE-COMMAND FIX (recommended):
+
+  1. Uninstall your current Node:
+     winget uninstall OpenJS.NodeJS
+
+  2. Install Node 22 LTS:
+     winget install OpenJS.NodeJS.LTS
+
+  3. CLOSE this PowerShell window, open a NEW one.
+
+  4. Re-run this installer.
+
+Alternatively, install nvm-windows and switch Node versions:
+  winget install CoreyButler.NVMforWindows
+  nvm install 22
+  nvm use 22
+
+Or, if you really want to use Node $nodeMajor and you've already
+installed Visual Studio Build Tools + Python: re-run with
+  `$env:SEO_ALLOW_NEW_NODE = "1"; <re-run command>`
+"@
+    }
+
+    Say "Node $nodeFullVersion detected - supported."
 
     # Pick package manager - enable corepack so pnpm/yarn work without separate install
     $pm = $null
@@ -272,12 +319,11 @@ Or, if you have winget (Windows 10+):
     $env:NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS = "true"
     $env:NPM_CONFIG_AUTO_APPROVE_BUILDS = "true"
 
-    Say "Installing dependencies (1-3 min the first time). Output streams to console + log."
-    # `--ignore-scripts` is the most reliable way to get past pnpm 11's
-    # build-script gate. We'll run those scripts manually via rebuild below.
-    # Note: no `2>&1 | Out-Null` - output streams live so user sees progress
-    # AND it lands in the install transcript.
-    & $pm install --ignore-scripts
+    Say "Installing dependencies (1-2 min first time, ~15s on re-runs)."
+    # --ignore-scripts bypasses pnpm 11's build-script gate (we run them
+    # manually via rebuild below). --prefer-offline uses the local
+    # pnpm-store cache when possible (10x faster on re-runs).
+    & $pm install --ignore-scripts --prefer-offline
     $installOk = ($LASTEXITCODE -eq 0)
 
     if (-not $installOk) {
@@ -315,11 +361,18 @@ Or, if you have winget (Windows 10+):
         return Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
     }
 
-    # Find the actual package dir (pnpm uses .pnpm/<hash>/node_modules/better-sqlite3 layout)
+    # Find the actual better-sqlite3 package dir. pnpm hoists into either:
+    #   node_modules/better-sqlite3/package.json
+    #   node_modules/.pnpm/better-sqlite3@VER/node_modules/better-sqlite3/package.json
+    # CRITICAL: must EXCLUDE @types/better-sqlite3 (TS type defs, no native code)
     function Find-SqlitePkgDir {
         if (-not (Test-Path "node_modules")) { return $null }
         $packageJson = Get-ChildItem -Path "node_modules" -Recurse -Filter "package.json" -ErrorAction SilentlyContinue -Force |
-            Where-Object { $_.FullName -match "[\\/]better-sqlite3[\\/]package\.json$" } |
+            Where-Object {
+                # Path must end in /better-sqlite3/package.json AND NOT contain @types
+                $_.FullName -match "[\\/]better-sqlite3[\\/]package\.json$" -and
+                $_.FullName -notmatch "@types"
+            } |
             Select-Object -First 1
         if ($packageJson) { return $packageJson.Directory.FullName }
         return $null
@@ -327,50 +380,41 @@ Or, if you have winget (Windows 10+):
 
     Say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
 
-    # Strategy 1: pnpm rebuild --force (forces re-run of build scripts
-    # even if pnpm thinks they were already deliberately skipped via
-    # --ignore-scripts. Critical for pnpm 11+.)
-    Say "  [1/4] pnpm rebuild --force"
-    & $pm rebuild --force *>&1 | ForEach-Object { Write-Host $_ }
+    # Strategy 1: pnpm install --force re-runs everything including build
+    # scripts. pnpm 11+ DOES NOT support --force on the `rebuild` command
+    # (that's why our previous attempt failed with "Unknown option: 'force'").
+    # `install --force` is the right call.
+    Say "  [1/3] pnpm install --force (re-runs build scripts)"
+    & $pm install --force *>&1 | ForEach-Object { Write-Host $_ }
 
     $sqliteBinding = Find-SqliteBinding
 
     if (-not $sqliteBinding) {
-        # Strategy 2: targeted rebuild of just better-sqlite3 with full verbosity
-        Warn "  Binding still missing. [2/4] pnpm rebuild better-sqlite3 --force"
-        & $pm rebuild --force better-sqlite3 *>&1 | ForEach-Object { Write-Host $_ }
-        $sqliteBinding = Find-SqliteBinding
-    }
-
-    if (-not $sqliteBinding) {
-        # Strategy 3: cd into the package and run prebuild-install directly
-        # to download the prebuilt .node from GitHub releases. Bypasses
-        # pnpm entirely. Usually works if the issue was pnpm's gate.
+        # Strategy 2: run prebuild-install directly inside the package.
+        # Downloads precompiled .node from WiseLibs/better-sqlite3 GitHub
+        # releases. Bypasses pnpm's build-script gate entirely.
         $sqlitePkg = Find-SqlitePkgDir
         if ($sqlitePkg) {
-            Warn "  [3/4] Running prebuild-install directly inside $sqlitePkg"
+            Warn "  [2/3] Running prebuild-install directly inside $sqlitePkg"
             Push-Location $sqlitePkg
             try {
-                # Try the package's own prebuild-install first, then a fresh npx
-                if (Test-Path "node_modules\.bin\prebuild-install.cmd") {
-                    & "node_modules\.bin\prebuild-install.cmd" *>&1 | ForEach-Object { Write-Host $_ }
-                } else {
-                    & npx --yes prebuild-install *>&1 | ForEach-Object { Write-Host $_ }
-                }
+                & npx --yes prebuild-install *>&1 | ForEach-Object { Write-Host $_ }
             } finally {
                 Pop-Location
             }
             $sqliteBinding = Find-SqliteBinding
+        } else {
+            Warn "  Could not find the better-sqlite3 package directory in node_modules!"
         }
     }
 
     if (-not $sqliteBinding) {
-        # Strategy 4: cd into package and run npm rebuild (uses node-gyp).
-        # This is the ONE path that genuinely needs the C++ toolchain.
-        # If this fails, it's a real toolchain issue.
+        # Strategy 3: cd into package and run npm rebuild (uses node-gyp).
+        # ONLY path that needs the C++ toolchain. If this fails, the user
+        # genuinely needs to install Visual Studio Build Tools.
         $sqlitePkg = Find-SqlitePkgDir
         if ($sqlitePkg) {
-            Warn "  [4/4] npm rebuild inside $sqlitePkg (needs C++ toolchain)"
+            Warn "  [3/3] npm rebuild inside $sqlitePkg (last resort, needs C++ toolchain)"
             Push-Location $sqlitePkg
             try {
                 & npm rebuild *>&1 | ForEach-Object { Write-Host $_ }
