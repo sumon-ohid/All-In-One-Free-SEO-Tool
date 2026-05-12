@@ -275,36 +275,76 @@ EOM
   fi
 
   # ============================================================
-  # NATIVE MODULE REBUILD + VERIFY better-sqlite3 actually built
+  # NATIVE MODULE REBUILD - 4-strategy cascade
   # ============================================================
-  say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
-  $PM rebuild
-  REBUILD_EXIT=$?
+  # better-sqlite3 MUST have its .node compiled binding. Cascade through
+  # increasingly aggressive strategies, verifying on disk after each.
 
-  # CRITICAL: verify better-sqlite3.node exists on disk. Without it,
-  # the migration step and the running app will both crash with
-  # "Could not locate the bindings file".
-  SQLITE_BINDING="$(find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1)"
+  find_sqlite_binding() {
+    find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1
+  }
+  find_sqlite_pkg_dir() {
+    find node_modules -path '*/better-sqlite3/package.json' -type f 2>/dev/null | head -1 | xargs -I {} dirname {}
+  }
+
+  say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
+
+  # Strategy 1: pnpm rebuild --force
+  say "  [1/4] pnpm rebuild --force"
+  $PM rebuild --force || true
+
+  SQLITE_BINDING="$(find_sqlite_binding)"
 
   if [ -z "$SQLITE_BINDING" ]; then
-    warn "better-sqlite3 binding not found after rebuild. Trying targeted rebuild..."
-    $PM rebuild better-sqlite3
-    SQLITE_BINDING="$(find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1)"
+    # Strategy 2: targeted rebuild of just better-sqlite3
+    warn "  Binding still missing. [2/4] pnpm rebuild better-sqlite3 --force"
+    $PM rebuild --force better-sqlite3 || true
+    SQLITE_BINDING="$(find_sqlite_binding)"
+  fi
+
+  if [ -z "$SQLITE_BINDING" ]; then
+    # Strategy 3: cd into package, run prebuild-install directly
+    PKG_DIR="$(find_sqlite_pkg_dir)"
+    if [ -n "$PKG_DIR" ]; then
+      warn "  [3/4] Running prebuild-install directly inside $PKG_DIR"
+      (cd "$PKG_DIR" && {
+        if [ -x "node_modules/.bin/prebuild-install" ]; then
+          node_modules/.bin/prebuild-install || true
+        else
+          npx --yes prebuild-install || true
+        fi
+      })
+      SQLITE_BINDING="$(find_sqlite_binding)"
+    fi
+  fi
+
+  if [ -z "$SQLITE_BINDING" ]; then
+    # Strategy 4: cd into package, run npm rebuild (node-gyp, needs toolchain)
+    PKG_DIR="$(find_sqlite_pkg_dir)"
+    if [ -n "$PKG_DIR" ]; then
+      warn "  [4/4] npm rebuild inside $PKG_DIR (needs C++ toolchain)"
+      (cd "$PKG_DIR" && npm rebuild || true)
+      SQLITE_BINDING="$(find_sqlite_binding)"
+    fi
   fi
 
   if [ -z "$SQLITE_BINDING" ]; then
     die "$(cat <<'MSG'
-better-sqlite3 native module FAILED to compile.
+better-sqlite3 native module FAILED to build after 4 different attempts.
 
-This is almost always a missing C++ build toolchain.
+Most likely cause: missing C++ build toolchain.
 
 To fix on Linux:
-  sudo apt install build-essential python3   # Debian/Ubuntu
-  sudo dnf groupinstall "Development Tools" && sudo dnf install python3   # Fedora
-  sudo pacman -S base-devel                   # Arch
+  Debian/Ubuntu:  sudo apt install build-essential python3
+  Fedora/RHEL:    sudo dnf groupinstall "Development Tools" && sudo dnf install python3
+  Arch:           sudo pacman -S base-devel
 
 To fix on macOS:
   xcode-select --install
+
+If behind a corporate proxy/firewall: check that you can reach
+https://github.com/WiseLibs/better-sqlite3/releases (prebuild-install
+needs to download from there).
 
 Then re-run this installer.
 MSG
@@ -312,10 +352,6 @@ MSG
   fi
 
   say "better-sqlite3 binding verified: $SQLITE_BINDING"
-
-  if [ "$REBUILD_EXIT" -ne 0 ]; then
-    warn "pnpm rebuild exited non-zero but better-sqlite3 built. Some non-critical native modules may not have built."
-  fi
 
   say "Downloading Playwright Chromium (~170 MB, one-time). May take 1-2 min."
   if ! $PM exec playwright install chromium; then

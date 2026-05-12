@@ -302,69 +302,116 @@ Or, if you have winget (Windows 10+):
     }
 
     # ============================================================
-    # NATIVE MODULE REBUILD - REQUIRED for the app to start
+    # NATIVE MODULE REBUILD - 4-strategy cascade to get binaries on disk
     # ============================================================
-    # better-sqlite3 in particular MUST be compiled or migrations and
-    # the app itself will fail with "Could not locate the bindings file".
-    # We rebuild with full output captured (not piped to Out-Null) AND
-    # verify on disk that the critical binding files exist afterwards.
+    # better-sqlite3 MUST have its .node compiled binding or the app
+    # will not start. We try increasingly aggressive strategies to
+    # produce the binding, verifying on disk after each attempt.
+    # `*>&1` captures ALL PowerShell streams from native commands -
+    # the bare `& cmd` form drops output on PS 5.1's transcript.
+
+    function Find-SqliteBinding {
+        if (-not (Test-Path "node_modules")) { return $null }
+        return Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
+    }
+
+    # Find the actual package dir (pnpm uses .pnpm/<hash>/node_modules/better-sqlite3 layout)
+    function Find-SqlitePkgDir {
+        if (-not (Test-Path "node_modules")) { return $null }
+        $packageJson = Get-ChildItem -Path "node_modules" -Recurse -Filter "package.json" -ErrorAction SilentlyContinue -Force |
+            Where-Object { $_.FullName -match "[\\/]better-sqlite3[\\/]package\.json$" } |
+            Select-Object -First 1
+        if ($packageJson) { return $packageJson.Directory.FullName }
+        return $null
+    }
 
     Say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
-    # Use approve-builds to non-interactively allowlist everything in
-    # package.json's pnpm.onlyBuiltDependencies, then rebuild.
-    # On pnpm versions where approve-builds doesn't accept --all/--yes,
-    # rebuild alone is enough because the allowlist is already in
-    # package.json. Either way, rebuild executes the post-install scripts.
-    & $pm rebuild
-    $rebuildExit = $LASTEXITCODE
 
-    # CRITICAL VERIFICATION: better-sqlite3 must have a compiled .node file.
-    # Walk node_modules to find it. pnpm may put it in either:
-    #   node_modules/better-sqlite3/build/Release/better_sqlite3.node
-    #   node_modules/.pnpm/.../better-sqlite3/build/Release/better_sqlite3.node
-    $sqliteBinding = $null
-    if (Test-Path "node_modules") {
-        $sqliteBinding = Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
+    # Strategy 1: pnpm rebuild --force (forces re-run of build scripts
+    # even if pnpm thinks they were already deliberately skipped via
+    # --ignore-scripts. Critical for pnpm 11+.)
+    Say "  [1/4] pnpm rebuild --force"
+    & $pm rebuild --force *>&1 | ForEach-Object { Write-Host $_ }
+
+    $sqliteBinding = Find-SqliteBinding
+
+    if (-not $sqliteBinding) {
+        # Strategy 2: targeted rebuild of just better-sqlite3 with full verbosity
+        Warn "  Binding still missing. [2/4] pnpm rebuild better-sqlite3 --force"
+        & $pm rebuild --force better-sqlite3 *>&1 | ForEach-Object { Write-Host $_ }
+        $sqliteBinding = Find-SqliteBinding
     }
 
     if (-not $sqliteBinding) {
-        # Rebuild didn't produce the binding. Try rebuilding just this package
-        # with verbose output so we can see WHY it's not compiling.
-        Warn "better-sqlite3 native binding not found after rebuild. Trying targeted rebuild..."
-        & $pm rebuild better-sqlite3
-        $sqliteBinding = Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
+        # Strategy 3: cd into the package and run prebuild-install directly
+        # to download the prebuilt .node from GitHub releases. Bypasses
+        # pnpm entirely. Usually works if the issue was pnpm's gate.
+        $sqlitePkg = Find-SqlitePkgDir
+        if ($sqlitePkg) {
+            Warn "  [3/4] Running prebuild-install directly inside $sqlitePkg"
+            Push-Location $sqlitePkg
+            try {
+                # Try the package's own prebuild-install first, then a fresh npx
+                if (Test-Path "node_modules\.bin\prebuild-install.cmd") {
+                    & "node_modules\.bin\prebuild-install.cmd" *>&1 | ForEach-Object { Write-Host $_ }
+                } else {
+                    & npx --yes prebuild-install *>&1 | ForEach-Object { Write-Host $_ }
+                }
+            } finally {
+                Pop-Location
+            }
+            $sqliteBinding = Find-SqliteBinding
+        }
     }
 
     if (-not $sqliteBinding) {
-        # Still no binding. This usually means the C++ toolchain isn't
-        # installed (no Visual Studio Build Tools / Python). Give the
-        # user actionable next steps.
+        # Strategy 4: cd into package and run npm rebuild (uses node-gyp).
+        # This is the ONE path that genuinely needs the C++ toolchain.
+        # If this fails, it's a real toolchain issue.
+        $sqlitePkg = Find-SqlitePkgDir
+        if ($sqlitePkg) {
+            Warn "  [4/4] npm rebuild inside $sqlitePkg (needs C++ toolchain)"
+            Push-Location $sqlitePkg
+            try {
+                & npm rebuild *>&1 | ForEach-Object { Write-Host $_ }
+            } finally {
+                Pop-Location
+            }
+            $sqliteBinding = Find-SqliteBinding
+        }
+    }
+
+    if (-not $sqliteBinding) {
+        # All four strategies failed. Could be:
+        # - No C++ build toolchain (most common on Windows)
+        # - Network blocking access to GitHub releases
+        # - Node version with no prebuilt + no toolchain to compile
         Die @"
-better-sqlite3 native module FAILED to compile.
+better-sqlite3 native module FAILED to build after 4 different attempts.
 
-This is almost always a missing C++ build toolchain on Windows.
+Most likely cause: missing C++ build toolchain on Windows.
 
-To fix:
-  1. Install "Build Tools for Visual Studio":
-     https://visualstudio.microsoft.com/visual-cpp-build-tools/
-     (or via winget: winget install Microsoft.VisualStudio.2022.BuildTools)
-     During install, select "Desktop development with C++" workload.
+QUICK FIX (recommended) - one command, ~3 GB download, ~10 min install:
+  winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+  winget install Python.Python.3.12
 
-  2. Also install Python (better-sqlite3's build script needs it):
-     winget install Python.Python.3.12
+Then re-run this installer.
 
-  3. Re-run this installer.
+ALTERNATIVE - reinstall Node.js and check the "Tools for Native Modules"
+checkbox during setup (https://nodejs.org/). This auto-installs Python +
+VS Build Tools but adds 10-20 min total. Then re-run this installer.
 
-Workaround: re-run with SEO_USE_PREBUILT=1 to download pre-compiled
-binaries instead of compiling locally (slower download, less reliable).
+If you're behind a corporate proxy/firewall: check if you can reach
+https://github.com/WiseLibs/better-sqlite3/releases (prebuild-install
+needs to download from there).
+
+For now, no workaround - the app cannot run without this native module.
+
+Log file: $logPath
 "@
     }
 
     Say "better-sqlite3 binding verified: $($sqliteBinding.FullName)"
-
-    if ($rebuildExit -ne 0) {
-        Warn "pnpm rebuild exited non-zero but better-sqlite3 built. Some non-critical native modules may not have built (sharp / tesseract)."
-    }
 
     # ============================================================
     # PLAYWRIGHT - chromium download for rank checking + SERP scan
