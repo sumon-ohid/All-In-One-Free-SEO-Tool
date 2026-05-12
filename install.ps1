@@ -164,7 +164,10 @@ Say "Using port $port"
 # ---- 3. detect Docker -------------------------------------------------------
 $hasDocker = $false
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-    docker info 2>$null 1>$null
+    # Suppress BOTH stdout and stderr - docker prints a noisy pipe-not-found
+    # message when Docker Desktop isn't running, which scares users into
+    # thinking the installer crashed.
+    $null = & cmd /c "docker info >nul 2>&1"
     if ($LASTEXITCODE -eq 0) { $hasDocker = $true }
 }
 
@@ -253,72 +256,151 @@ Or, if you have winget (Windows 10+):
     }
     Say "Using $pm"
 
-    # Belt-and-suspenders env vars for pnpm 11's build-script policy.
-    # Mirrors the .npmrc settings but in case pnpm reads env vars first.
+    # ============================================================
+    # DEPENDENCY INSTALL - pnpm 11+ build-script bypass strategy
+    # ============================================================
+    # pnpm 11+ blocks native build scripts unless approved via an
+    # interactive prompt OR allowlisted in package.json. Various .npmrc
+    # keys to disable the check are inconsistently honored across pnpm
+    # minor versions, so we bypass entirely with --ignore-scripts and
+    # then explicitly run pnpm rebuild afterwards, verifying the
+    # critical native bindings exist on disk before continuing.
+
+    # Env vars as belt-and-suspenders for pnpm 11's build-script policy.
     $env:NPM_CONFIG_IGNORED_BUILDS_CHECK = "false"
     $env:NPM_CONFIG_IGNORED_BUILDS_FAIL_INSTALL = "false"
     $env:NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS = "true"
     $env:NPM_CONFIG_AUTO_APPROVE_BUILDS = "true"
 
-    Say "Installing dependencies (1-3 minutes the first time)"
-    & $pm install
+    Say "Installing dependencies (1-3 min the first time). Output streams to console + log."
+    # `--ignore-scripts` is the most reliable way to get past pnpm 11's
+    # build-script gate. We'll run those scripts manually via rebuild below.
+    # Note: no `2>&1 | Out-Null` - output streams live so user sees progress
+    # AND it lands in the install transcript.
+    & $pm install --ignore-scripts
     $installOk = ($LASTEXITCODE -eq 0)
 
     if (-not $installOk) {
-        # Strategy 1: try again with --ignore-scripts (bypass pnpm 11's
-        # build-script safety entirely), then rebuild manually below.
-        Warn "pnpm install failed. Retrying with --ignore-scripts..."
-        & $pm install --ignore-scripts
-        $installOk = ($LASTEXITCODE -eq 0)
-    }
-
-    if (-not $installOk) {
-        # Strategy 2: nuclear option - wipe node_modules AND pnpm-lock.yaml
-        # so pnpm fully re-resolves from package.json (where our allowlist
-        # in pnpm.onlyBuiltDependencies lives). Preserves data.db /
-        # .env.local / .seo-encryption-key which live in the install dir
-        # root, not in node_modules.
-        Warn "Still failed. Wiping node_modules + pnpm-lock.yaml for a fresh install..."
+        # Nuclear fallback: wipe node_modules + lockfile, retry, then npm.
+        Warn "pnpm install --ignore-scripts failed. Wiping node_modules + lockfile..."
         if (Test-Path "node_modules")  { Remove-Item -Recurse -Force "node_modules" -ErrorAction SilentlyContinue }
         if (Test-Path "pnpm-lock.yaml") { Remove-Item -Force "pnpm-lock.yaml" -ErrorAction SilentlyContinue }
         & $pm install --ignore-scripts
         $installOk = ($LASTEXITCODE -eq 0)
     }
 
-    if (-not $installOk) {
-        # Strategy 3: fall back to npm. Slower and produces a different
-        # lockfile, but doesn't have pnpm's build-script restriction.
-        # This is a true last-resort - shouldn't be reached in practice
-        # after the package.json + .npmrc fixes.
-        if (Get-Command npm -ErrorAction SilentlyContinue) {
-            Warn "pnpm install failed three times. Falling back to npm..."
-            if (Test-Path "node_modules")  { Remove-Item -Recurse -Force "node_modules" -ErrorAction SilentlyContinue }
-            if (Test-Path "pnpm-lock.yaml") { Remove-Item -Force "pnpm-lock.yaml" -ErrorAction SilentlyContinue }
-            & npm install --no-audit --no-fund
-            $installOk = ($LASTEXITCODE -eq 0)
-        }
+    if (-not $installOk -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Warn "Falling back to npm install (no build-script restrictions)..."
+        if (Test-Path "node_modules")  { Remove-Item -Recurse -Force "node_modules" -ErrorAction SilentlyContinue }
+        if (Test-Path "pnpm-lock.yaml") { Remove-Item -Force "pnpm-lock.yaml" -ErrorAction SilentlyContinue }
+        & npm install --no-audit --no-fund --ignore-scripts
+        $installOk = ($LASTEXITCODE -eq 0)
     }
 
     if (-not $installOk) {
         Die "Dependency install failed after multiple recovery attempts. See log for details."
     }
 
-    # ALWAYS run rebuild to force native builds for allowlisted packages
-    # (better-sqlite3, sharp, esbuild, tesseract.js, unrs-resolver, msw).
-    # Non-fatal - if rebuild has issues, the modules may still work.
-    Say "Rebuilding native modules (better-sqlite3, sharp, esbuild, etc)"
-    & $pm rebuild 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Warn "pnpm rebuild reported issues - some native modules may need a manual rebuild later."
+    # ============================================================
+    # NATIVE MODULE REBUILD - REQUIRED for the app to start
+    # ============================================================
+    # better-sqlite3 in particular MUST be compiled or migrations and
+    # the app itself will fail with "Could not locate the bindings file".
+    # We rebuild with full output captured (not piped to Out-Null) AND
+    # verify on disk that the critical binding files exist afterwards.
+
+    Say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
+    # Use approve-builds to non-interactively allowlist everything in
+    # package.json's pnpm.onlyBuiltDependencies, then rebuild.
+    # On pnpm versions where approve-builds doesn't accept --all/--yes,
+    # rebuild alone is enough because the allowlist is already in
+    # package.json. Either way, rebuild executes the post-install scripts.
+    & $pm rebuild
+    $rebuildExit = $LASTEXITCODE
+
+    # CRITICAL VERIFICATION: better-sqlite3 must have a compiled .node file.
+    # Walk node_modules to find it. pnpm may put it in either:
+    #   node_modules/better-sqlite3/build/Release/better_sqlite3.node
+    #   node_modules/.pnpm/.../better-sqlite3/build/Release/better_sqlite3.node
+    $sqliteBinding = $null
+    if (Test-Path "node_modules") {
+        $sqliteBinding = Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
     }
 
-    Say "Downloading Playwright Chromium (~170 MB, one-time)"
-    & $pm exec playwright install chromium
-    if ($LASTEXITCODE -ne 0) { Warn "Playwright install failed; rank-checking tools may not work" }
+    if (-not $sqliteBinding) {
+        # Rebuild didn't produce the binding. Try rebuilding just this package
+        # with verbose output so we can see WHY it's not compiling.
+        Warn "better-sqlite3 native binding not found after rebuild. Trying targeted rebuild..."
+        & $pm rebuild better-sqlite3
+        $sqliteBinding = Get-ChildItem -Path "node_modules" -Recurse -Filter "better_sqlite3.node" -ErrorAction SilentlyContinue -Force | Select-Object -First 1
+    }
 
+    if (-not $sqliteBinding) {
+        # Still no binding. This usually means the C++ toolchain isn't
+        # installed (no Visual Studio Build Tools / Python). Give the
+        # user actionable next steps.
+        Die @"
+better-sqlite3 native module FAILED to compile.
+
+This is almost always a missing C++ build toolchain on Windows.
+
+To fix:
+  1. Install "Build Tools for Visual Studio":
+     https://visualstudio.microsoft.com/visual-cpp-build-tools/
+     (or via winget: winget install Microsoft.VisualStudio.2022.BuildTools)
+     During install, select "Desktop development with C++" workload.
+
+  2. Also install Python (better-sqlite3's build script needs it):
+     winget install Python.Python.3.12
+
+  3. Re-run this installer.
+
+Workaround: re-run with SEO_USE_PREBUILT=1 to download pre-compiled
+binaries instead of compiling locally (slower download, less reliable).
+"@
+    }
+
+    Say "better-sqlite3 binding verified: $($sqliteBinding.FullName)"
+
+    if ($rebuildExit -ne 0) {
+        Warn "pnpm rebuild exited non-zero but better-sqlite3 built. Some non-critical native modules may not have built (sharp / tesseract)."
+    }
+
+    # ============================================================
+    # PLAYWRIGHT - chromium download for rank checking + SERP scan
+    # ============================================================
+    Say "Downloading Playwright Chromium (~170 MB, one-time). May take 1-2 min."
+    & $pm exec playwright install chromium
+    if ($LASTEXITCODE -ne 0) {
+        Warn "Playwright Chromium install failed (exit $LASTEXITCODE)."
+        Warn "Rank-checking + SERP scanning tools won't work until this succeeds."
+        Warn "To retry later:  cd '$dir'; pnpm exec playwright install chromium"
+    } else {
+        Say "Playwright Chromium installed."
+    }
+
+    # ============================================================
+    # DATABASE MIGRATIONS - capture full stderr so failures are visible
+    # ============================================================
     Say "Applying database migrations"
-    node scripts/migrate.cjs
-    if ($LASTEXITCODE -ne 0) { Die "Migrations failed." }
+    # `2>&1` merges stderr into stdout so transcript captures it.
+    # Without this, migration errors silently vanish from the log.
+    & node scripts/migrate.cjs 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+        Die @"
+Database migrations failed (exit $LASTEXITCODE).
+
+The most common cause is a corrupted or partially-built better-sqlite3.
+If you see "Could not locate the bindings file" above, run:
+  cd '$dir'
+  pnpm rebuild better-sqlite3 --verbose
+
+If you see "SQLITE_CORRUPT" or "no such table", your data.db may be damaged.
+Backup data.db, delete it, and re-run the installer to start fresh.
+
+Full error output is logged above and in: $logPath
+"@
+    }
 
     if (-not (Test-Path ".env.local")) {
         if (Test-Path ".env.example") {

@@ -246,54 +246,101 @@ EOM
   fi
   say "Using $PM"
 
-  # Belt-and-suspenders env vars for pnpm 11's build-script policy.
+  # ============================================================
+  # DEPENDENCY INSTALL - pnpm 11+ build-script bypass strategy
+  # ============================================================
   export NPM_CONFIG_IGNORED_BUILDS_CHECK=false
   export NPM_CONFIG_IGNORED_BUILDS_FAIL_INSTALL=false
   export NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true
   export NPM_CONFIG_AUTO_APPROVE_BUILDS=true
 
-  say "Installing dependencies (1-3 minutes the first time)"
+  say "Installing dependencies (1-3 min the first time). Output streams below."
   INSTALL_OK=0
-  $PM install && INSTALL_OK=1
+  $PM install --ignore-scripts && INSTALL_OK=1
 
   if [ "$INSTALL_OK" != "1" ]; then
-    # Strategy 1: --ignore-scripts bypasses pnpm 11's safety check.
-    warn "pnpm install failed. Retrying with --ignore-scripts..."
-    $PM install --ignore-scripts && INSTALL_OK=1
-  fi
-
-  if [ "$INSTALL_OK" != "1" ]; then
-    # Strategy 2: nuclear - wipe node_modules AND pnpm-lock.yaml so
-    # pnpm fully re-resolves from package.json (where our allowlist
-    # lives). Preserves data.db / .env.local / .seo-encryption-key.
-    warn "Still failed. Wiping node_modules + pnpm-lock.yaml for fresh install..."
+    warn "pnpm install --ignore-scripts failed. Wiping node_modules + lockfile..."
     rm -rf node_modules pnpm-lock.yaml
     $PM install --ignore-scripts && INSTALL_OK=1
   fi
 
   if [ "$INSTALL_OK" != "1" ] && command -v npm >/dev/null 2>&1; then
-    # Strategy 3: fall back to npm (no build-script restriction).
-    warn "pnpm install failed three times. Falling back to npm..."
+    warn "Falling back to npm install (no build-script restrictions)..."
     rm -rf node_modules pnpm-lock.yaml
-    npm install --no-audit --no-fund && INSTALL_OK=1
+    npm install --no-audit --no-fund --ignore-scripts && INSTALL_OK=1
   fi
 
   if [ "$INSTALL_OK" != "1" ]; then
     die "Dependency install failed after multiple recovery attempts. See log for details."
   fi
 
-  # Force-rebuild allowlisted native modules. Non-fatal.
-  say "Rebuilding native modules (better-sqlite3, sharp, esbuild, etc)"
-  $PM rebuild >/dev/null 2>&1 || warn "pnpm rebuild reported issues - some native modules may need a manual rebuild later."
+  # ============================================================
+  # NATIVE MODULE REBUILD + VERIFY better-sqlite3 actually built
+  # ============================================================
+  say "Building native modules (better-sqlite3, sharp, esbuild). Output streams below."
+  $PM rebuild
+  REBUILD_EXIT=$?
 
-  say "Downloading Playwright Chromium (~170 MB, one-time)"
-  $PM exec playwright install chromium || warn "Playwright install failed; rank-checking tools may not work"
+  # CRITICAL: verify better-sqlite3.node exists on disk. Without it,
+  # the migration step and the running app will both crash with
+  # "Could not locate the bindings file".
+  SQLITE_BINDING="$(find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1)"
+
+  if [ -z "$SQLITE_BINDING" ]; then
+    warn "better-sqlite3 binding not found after rebuild. Trying targeted rebuild..."
+    $PM rebuild better-sqlite3
+    SQLITE_BINDING="$(find node_modules -name 'better_sqlite3.node' -type f 2>/dev/null | head -1)"
+  fi
+
+  if [ -z "$SQLITE_BINDING" ]; then
+    die "$(cat <<'MSG'
+better-sqlite3 native module FAILED to compile.
+
+This is almost always a missing C++ build toolchain.
+
+To fix on Linux:
+  sudo apt install build-essential python3   # Debian/Ubuntu
+  sudo dnf groupinstall "Development Tools" && sudo dnf install python3   # Fedora
+  sudo pacman -S base-devel                   # Arch
+
+To fix on macOS:
+  xcode-select --install
+
+Then re-run this installer.
+MSG
+)"
+  fi
+
+  say "better-sqlite3 binding verified: $SQLITE_BINDING"
+
+  if [ "$REBUILD_EXIT" -ne 0 ]; then
+    warn "pnpm rebuild exited non-zero but better-sqlite3 built. Some non-critical native modules may not have built."
+  fi
+
+  say "Downloading Playwright Chromium (~170 MB, one-time). May take 1-2 min."
+  if ! $PM exec playwright install chromium; then
+    warn "Playwright Chromium install failed."
+    warn "Rank-checking + SERP scanning won't work until this succeeds."
+    warn "To retry later:  cd $DIR && pnpm exec playwright install chromium"
+  fi
   if [ "$(uname -s)" = "Linux" ]; then
     $PM exec playwright install-deps chromium >/dev/null 2>&1 || warn "Couldn't auto-install Chromium system deps. If rank checks fail: apt install libnss3 libgbm1 libasound2"
   fi
 
   say "Applying database migrations"
-  node scripts/migrate.cjs
+  if ! node scripts/migrate.cjs 2>&1; then
+    die "$(cat <<MSG
+Database migrations failed.
+
+The most common cause is a corrupted or partially-built better-sqlite3.
+If you see "Could not locate the bindings file" above, run:
+  cd $DIR
+  pnpm rebuild better-sqlite3 --verbose
+
+Full error output is logged above and in: $LOG
+MSG
+)"
+  fi
 
   [ -f ".env.local" ] || cp .env.example .env.local 2>/dev/null || true
 
