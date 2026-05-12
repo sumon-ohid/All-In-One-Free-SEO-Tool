@@ -247,7 +247,23 @@ EOM
   say "Using $PM"
 
   say "Installing dependencies (1-3 minutes the first time)"
-  $PM install
+  if ! $PM install; then
+    # pnpm 11+ fails the install if any package's build script was
+    # skipped. That can happen when a prior failed install left
+    # node_modules in a half-built state. Recovery: wipe node_modules
+    # (NOT lockfile, NOT data.db) and re-install fresh.
+    warn "pnpm install failed - probably skipped-builds from a prior run."
+    warn "Cleaning node_modules and retrying..."
+    rm -rf node_modules
+    if ! $PM install; then
+      die "Dependency install failed even after a clean retry. See log for details."
+    fi
+  fi
+
+  # Belt-and-suspenders: force-rebuild allowlisted native modules so
+  # their post-install steps DEFINITELY ran. Non-fatal.
+  say "Rebuilding native modules (better-sqlite3, sharp, esbuild, etc)"
+  $PM rebuild >/dev/null 2>&1 || warn "pnpm rebuild reported issues - some native modules may need a manual rebuild later."
 
   say "Downloading Playwright Chromium (~170 MB, one-time)"
   $PM exec playwright install chromium || warn "Playwright install failed; rank-checking tools may not work"

@@ -44,7 +44,7 @@ try {
 # If this script runs from a double-click or `iex` and hits Die / throws,
 # the window normally vanishes - user sees nothing. This handler keeps it
 # open and tells them where the log is.
-function Pause-AndCopyLog([bool]$failed) {
+function Save-LogAndExit([bool]$failed) {
     try { Stop-Transcript | Out-Null } catch {}
     # Copy log into the install dir (if it exists) AND onto the Desktop
     # so the user can find it without knowing the install path.
@@ -85,7 +85,7 @@ function Pause-AndCopyLog([bool]$failed) {
 function Say($m)  { Write-Host "-> $m" -ForegroundColor Green }
 function Info($m) { Write-Host "i  $m" -ForegroundColor Cyan }
 function Warn($m) { Write-Host "!  $m" -ForegroundColor Yellow }
-function Die($m)  { Write-Host "X  $m" -ForegroundColor Red; Pause-AndCopyLog $true; exit 1 }
+function Die($m)  { Write-Host "X  $m" -ForegroundColor Red; Save-LogAndExit $true; exit 1 }
 
 # Trap for unhandled errors - keeps the window open even when something
 # crashes unexpectedly (PowerShell parse errors, .NET exceptions, etc.)
@@ -93,7 +93,7 @@ trap {
     Write-Host ""
     Write-Host "X  Unhandled error: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "   At: $($_.InvocationInfo.PositionMessage)" -ForegroundColor Red
-    Pause-AndCopyLog $true
+    Save-LogAndExit $true
     exit 1
 }
 
@@ -255,7 +255,31 @@ Or, if you have winget (Windows 10+):
 
     Say "Installing dependencies (1-3 minutes the first time)"
     & $pm install
-    if ($LASTEXITCODE -ne 0) { Die "Dependency install failed." }
+    if ($LASTEXITCODE -ne 0) {
+        # pnpm 11+ fails the install if any package's build script was
+        # skipped. That can happen when a prior failed install left
+        # node_modules in a half-built state (build scripts marked
+        # skipped even though our allowlist now includes them).
+        # Recovery: wipe node_modules and re-install fresh. Idempotent
+        # for data.db / .env.local / .seo-encryption-key (those live
+        # in the install dir, not node_modules).
+        Warn "pnpm install failed - probably skipped-builds from a prior run."
+        Warn "Cleaning node_modules and retrying..."
+        if (Test-Path "node_modules") {
+            Remove-Item -Recurse -Force "node_modules" -ErrorAction SilentlyContinue
+        }
+        & $pm install
+        if ($LASTEXITCODE -ne 0) { Die "Dependency install failed even after a clean retry. See log for details." }
+    }
+
+    # Belt-and-suspenders: explicitly rebuild allowlisted native modules
+    # so their post-install (compile / download binary) DEFINITELY ran.
+    # Non-fatal - if rebuild fails, the modules may still work from cache.
+    Say "Rebuilding native modules (better-sqlite3, sharp, esbuild, etc)"
+    & $pm rebuild 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Warn "pnpm rebuild reported issues - some native modules may need a manual rebuild later."
+    }
 
     Say "Downloading Playwright Chromium (~170 MB, one-time)"
     & $pm exec playwright install chromium
@@ -551,4 +575,4 @@ if (Test-Path $welcome) { Write-Host "Guide:   $welcome" }
 Write-Host ""
 
 # Stop transcript + save log copies + pause so the window doesn't auto-close
-Pause-AndCopyLog $false
+Save-LogAndExit $false
