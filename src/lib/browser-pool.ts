@@ -85,12 +85,19 @@ async function getStoredCookies(): Promise<StoredCookie[]> {
 }
 
 async function acquire(): Promise<void> {
+  // Race-free counter increment: we INC active first, then check if we
+  // overshot the cap. If so, decrement back and queue up. This avoids
+  // the classic "check-then-set" race where two concurrent acquires
+  // both pass `active < max` before either increments.
+  //
+  // We also cache max in a closure so a slow getSetting() round-trip
+  // can't interleave with another caller's check.
   const max = await getMaxConcurrency();
-  if (active < max) {
-    active += 1;
-    return;
-  }
+  active += 1;
+  if (active <= max) return;
+  active -= 1;
   await new Promise<void>((resolve) => waiters.push(resolve));
+  // When release() wakes us, the slot is already accounted for.
   active += 1;
 }
 

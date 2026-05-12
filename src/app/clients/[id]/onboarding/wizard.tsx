@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -509,15 +509,20 @@ function CompletedStep({ client }: { client: WizardClient }) {
     { rule: string; confidence: string; feature: string }[] | null
   >(null);
 
-  // Lazy-load learned rules once
-  if (learnedRules === null && typeof window !== "undefined") {
-    queueMicrotask(() => {
-      import("./actions").then(async ({ getLearnedRulesForClient }) => {
-        const rules = await getLearnedRulesForClient(client.id);
-        setLearnedRules(rules);
-      });
+  // Lazy-load learned rules once. Previously this fired queueMicrotask
+  // from the render phase whenever learnedRules was null — each
+  // microtask scheduled a setState, which re-entered the same path on
+  // the next render and started an infinite-render loop in React 19.
+  useEffect(() => {
+    let cancelled = false;
+    import("./actions").then(async ({ getLearnedRulesForClient }) => {
+      const rules = await getLearnedRulesForClient(client.id);
+      if (!cancelled) setLearnedRules(rules);
     });
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [client.id]);
 
   return (
     <section className="glass-apple relative overflow-hidden rounded-2xl p-6 space-y-4">

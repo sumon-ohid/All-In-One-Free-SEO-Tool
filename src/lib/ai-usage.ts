@@ -45,8 +45,21 @@ export async function logAiCall(opts: {
       status: opts.status ?? "ok",
       errorMsg: opts.errorMsg ?? null,
     });
-  } catch {
-    // Never let usage logging block a real AI call
+  } catch (err) {
+    // Never let usage logging block a real AI call, but DO surface
+    // the failure to the error log so admins notice — silent failures
+    // here corrupted the monthly cap accounting (over-spend goes
+    // undetected because cost was never written).
+    try {
+      const { logError } = await import("./error-log");
+      await logError({
+        source: "server",
+        context: "ai-usage.logAiCall",
+        error: err as Error,
+      });
+    } catch {
+      // last resort — also failed to log, give up
+    }
   }
 }
 

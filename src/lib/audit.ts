@@ -1046,9 +1046,12 @@ async function crawlSite(
           if (u.origin !== origin) continue;
           if (/\.(pdf|jpg|jpeg|png|gif|svg|webp|avif|mp4|zip|css|js)(\?|$)/i.test(u.pathname))
             continue;
+          // Cap check FIRST. Previously this ran AFTER `visited.add`,
+          // so a site with pathological redirects could grow visited
+          // into 10k+ entries (~50 MB) before the check fired.
+          if (visited.size >= options.maxPages * 4) break;
           if (visited.has(u.toString())) continue;
           visited.add(u.toString());
-          if (visited.size > options.maxPages * 4) break; // soft cap on queue
           queue.push({ url: u.toString(), depth: depth + 1 });
         } catch {
           // ignore

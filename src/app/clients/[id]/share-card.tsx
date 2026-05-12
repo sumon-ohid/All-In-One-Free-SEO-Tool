@@ -48,9 +48,17 @@ export function ShareCard({
     : null;
 
   const copy = async () => {
-    if (!url) return;
+    if (!shareToken) return;
+    // Read origin AT CLICK TIME — not from state. There's a brief window
+    // after mount where `origin` is still "" (useEffect hasn't fired
+    // yet); clicking Copy then would put a bare /portal/<token> into the
+    // clipboard instead of the absolute URL.
+    const absolute =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/portal/${shareToken}`
+        : `/portal/${shareToken}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(absolute);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {

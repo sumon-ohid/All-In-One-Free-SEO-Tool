@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   CheckCircle2,
   ExternalLink,
@@ -23,6 +23,19 @@ export function PerClientGoogleConnect({
   const [pending, startTransition] = useTransition();
   const [opening, setOpening] = useState(false);
 
+  // Track the OAuth-poll interval so an unmount mid-popup clears it.
+  // Previously: setInterval ran forever if the user navigated away
+  // before closing the popup, leaking a 2 Hz CPU tick per session.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (pollRef.current !== null) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
+
   function startOAuth() {
     setOpening(true);
     const w = window.open(
@@ -34,11 +47,14 @@ export function PerClientGoogleConnect({
       setOpening(false);
       return;
     }
-    const checkClosed = setInterval(() => {
+    if (pollRef.current !== null) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
       if (w.closed) {
-        clearInterval(checkClosed);
+        if (pollRef.current !== null) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
         setOpening(false);
-        // Reload to pick up new tokens
         window.location.reload();
       }
     }, 500);
