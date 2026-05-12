@@ -32,6 +32,7 @@ import {
 import type { GuestPostSite } from "@/lib/guest-post-sites";
 import type { GuestPostDraft } from "@/db/schema";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   AiModelPicker,
   type ModelSelection,
@@ -688,8 +689,14 @@ function DraftRow({
           <button
             type="button"
             disabled={pending}
-            onClick={() => {
-              if (!confirm("Delete this draft?")) return;
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: "Delete this draft?",
+                description: "The guest-post draft and its history are removed.",
+                confirmLabel: "Delete draft",
+                destructive: true,
+              });
+              if (!ok) return;
               startTransition(async () => {
                 await deleteDraft(draft.id);
               });

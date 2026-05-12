@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { addAnnotation, removeAnnotation, type CreateState } from "./actions";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import type { Annotation } from "@/db/schema";
 import {
   KIND_COLOR,
@@ -192,8 +193,15 @@ export function AnnotationsClient({
               <button
                 type="button"
                 disabled={pendingDel}
-                onClick={() => {
-                  if (!confirm("Delete this annotation?")) return;
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: "Delete this annotation?",
+                    description:
+                      "It will no longer appear on traffic / rank charts.",
+                    confirmLabel: "Delete",
+                    destructive: true,
+                  });
+                  if (!ok) return;
                   startDel(async () => {
                     await removeAnnotation(a.id);
                   });

@@ -28,6 +28,7 @@ import {
   type DraftState,
   type SuggestState,
 } from "./actions";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import type { BulkBlogTopic, SiteBlogContext } from "@/lib/bulk-blog-planner";
 import type { ContentBrief } from "@/db/schema";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
@@ -604,8 +605,14 @@ function DraftRow({ brief }: { brief: ContentBrief }) {
           <button
             type="button"
             disabled={pending}
-            onClick={() => {
-              if (!confirm("Delete this draft? This cannot be undone.")) return;
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: "Delete this draft?",
+                description: "The draft and its generated brief are removed.",
+                confirmLabel: "Delete draft",
+                destructive: true,
+              });
+              if (!ok) return;
               startTransition(async () => {
                 await deleteBrief(brief.id);
               });

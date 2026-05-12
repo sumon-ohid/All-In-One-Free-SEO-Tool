@@ -21,6 +21,7 @@ import {
   pinChat,
   renameChat,
 } from "./actions";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import type {
   ChatConversation,
   ChatMessage,
@@ -75,17 +76,18 @@ export function ChatsClient({
             <button
               type="button"
               disabled={pending}
-              onClick={() => {
-                if (
-                  !confirm(
-                    "Clear all unpinned conversations" +
-                      (currentKind === "all"
-                        ? ""
-                        : ` from ${KIND_LABEL[currentKind] ?? currentKind}`) +
-                      "?",
-                  )
-                )
-                  return;
+              onClick={async () => {
+                const scope =
+                  currentKind === "all"
+                    ? "all conversations"
+                    : `${KIND_LABEL[currentKind] ?? currentKind} conversations`;
+                const ok = await confirmDialog({
+                  title: `Clear unpinned ${scope}?`,
+                  description: "Pinned chats are preserved. This can't be undone.",
+                  confirmLabel: "Clear unpinned",
+                  destructive: true,
+                });
+                if (!ok) return;
                 startTransition(async () => {
                   await clearChats(
                     currentKind === "all"
@@ -229,8 +231,14 @@ function ConvRow({ conv }: { conv: ChatConversation }) {
         <button
           type="button"
           disabled={pending}
-          onClick={() => {
-            if (!confirm("Delete this conversation?")) return;
+          onClick={async () => {
+            const ok = await confirmDialog({
+              title: "Delete this conversation?",
+              description: "The transcript is removed permanently.",
+              confirmLabel: "Delete",
+              destructive: true,
+            });
+            if (!ok) return;
             startTransition(async () => {
               await deleteChat(conv.id);
             });

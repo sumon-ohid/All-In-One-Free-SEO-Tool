@@ -26,6 +26,7 @@ import {
   type IdeasState,
 } from "./actions";
 import { trackResource } from "../../actions";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   difficultyTone,
   type Difficulty,
@@ -457,8 +458,15 @@ function TrackerRow({
             <button
               type="button"
               disabled={pending}
-              onClick={() => {
-                if (!confirm("Remove from tracker?")) return;
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: "Remove from tracker?",
+                  description:
+                    "The prospect is removed from this client's list. You can re-add it later.",
+                  confirmLabel: "Remove",
+                  destructive: true,
+                });
+                if (!ok) return;
                 startTransition(async () => {
                   await removeForClient(clientId, row.id);
                 });

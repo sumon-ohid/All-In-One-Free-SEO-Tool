@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   deleteUpload,
   parseAndStoreLog,
@@ -81,8 +82,14 @@ export function BotLogsClient({
     reader.readAsText(file);
   }
 
-  function remove(id: number) {
-    if (!confirm("Delete this upload?")) return;
+  async function remove(id: number) {
+    const ok = await confirmDialog({
+      title: "Delete this log upload?",
+      description: "All parsed bot hits from this file will be removed.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     startTransition(async () => {
       await deleteUpload(id);
       router.refresh();

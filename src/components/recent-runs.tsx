@@ -8,6 +8,7 @@ import {
   fetchRecentRuns,
   togglePinAction,
 } from "@/app/api/tool-runs/actions";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import type { ToolRun } from "@/db/schema";
 
 /**
@@ -64,13 +65,14 @@ export function RecentRuns({
           <button
             type="button"
             disabled={pending}
-            onClick={() => {
-              if (
-                !confirm(
-                  "Clear all unpinned runs for this tool? Pinned runs are kept.",
-                )
-              )
-                return;
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: "Clear all unpinned runs for this tool?",
+                description: "Pinned runs are kept. This can't be undone.",
+                confirmLabel: "Clear unpinned",
+                destructive: true,
+              });
+              if (!ok) return;
               startTransition(async () => {
                 await clearAllRunsForTool(toolId, clientId ?? null);
                 const rows = await fetchRecentRuns({ toolId, clientId, limit });
@@ -150,8 +152,15 @@ export function RecentRuns({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => {
-                    if (!confirm("Delete this run?")) return;
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: "Delete this run?",
+                      description:
+                        "The result is removed permanently. Re-run the tool to regenerate it.",
+                      confirmLabel: "Delete",
+                      destructive: true,
+                    });
+                    if (!ok) return;
                     startTransition(async () => {
                       await deleteRunAction(r.id, toolId);
                       const rows = await fetchRecentRuns({

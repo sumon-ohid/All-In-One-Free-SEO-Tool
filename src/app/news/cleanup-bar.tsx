@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   cleanupOldItems,
   clearAllItems,
@@ -27,8 +28,14 @@ export function CleanupBar() {
     });
   }
 
-  function clearAll() {
-    if (!confirm("Delete every saved news item? Feed configurations stay.")) return;
+  async function clearAll() {
+    const ok = await confirmDialog({
+      title: "Delete every saved news item?",
+      description: "Feed configurations stay. Items can be re-fetched.",
+      confirmLabel: "Delete all items",
+      destructive: true,
+    });
+    if (!ok) return;
     setMsg(null);
     startTransition(async () => {
       const r = await clearAllItems();
