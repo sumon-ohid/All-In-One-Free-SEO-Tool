@@ -230,34 +230,11 @@ EOM
     die "Node $NODE_FULL_VERSION is too old. This installer needs Node 22 LTS. Install: see https://nodejs.org/"
   fi
 
-  if [ "$NODE_MAJOR" -gt 22 ] && [ "$SEO_ALLOW_NEW_NODE" != "1" ]; then
-    die "$(cat <<MSG
-Node $NODE_FULL_VERSION is too new (major version $NODE_MAJOR).
-
-This app's dependencies (better-sqlite3, sharp, tesseract.js) don't yet
-ship prebuilt binaries for Node $NODE_MAJOR. Compiling from source needs
-a C++ toolchain that's often missing.
-
-The reliable fix is to use Node 22 LTS (supported until April 2027).
-It has prebuilts for every native module we use - install completes in
-2 minutes, zero C++ tools needed.
-
-To install Node 22 LTS:
-
-  macOS:    brew uninstall --ignore-dependencies node && brew install node@22
-            (or use nvm: nvm install 22 && nvm use 22)
-
-  Linux:    nvm install 22 && nvm use 22
-            (or via your package manager - many distros default to LTS)
-
-After installing, open a NEW terminal and re-run this installer.
-
-If you really want to use Node $NODE_MAJOR and have a C++ toolchain
-installed, re-run with: SEO_ALLOW_NEW_NODE=1 <installer command>
-MSG
-)"
+  # better-sqlite3 12.10+ ships prebuilts for Node 22, 23, 24, 25, 26.
+  # No version-blocking - just a softer note for non-LTS users.
+  if [ "$NODE_MAJOR" -gt 22 ]; then
+    info "Node $NODE_FULL_VERSION is current/non-LTS. better-sqlite3 12.10+ has prebuilts for it - should work fine."
   fi
-
   say "Node $NODE_FULL_VERSION detected - supported."
 
   # Package manager — prefer pnpm via corepack

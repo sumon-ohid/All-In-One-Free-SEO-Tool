@@ -290,33 +290,11 @@ else {
         )
     }
 
-    if ($nodeMajor -gt 22 -and $env:SEO_ALLOW_NEW_NODE -ne "1") {
-        DieMulti @(
-            "Node $nodeFullVersion is too new (major version $nodeMajor).",
-            "",
-            "This app's dependencies (better-sqlite3, sharp, tesseract.js) don't yet",
-            "ship prebuilt binaries for Node $nodeMajor. Trying to compile them from",
-            "source requires installing a 3 GB C++ toolchain - and even then it",
-            "often fails on cutting-edge Node versions.",
-            "",
-            "The reliable fix is to use Node 22 LTS (supported until April 2027).",
-            "It has prebuilts for every native module we use - install completes",
-            "in 2 minutes, zero C++ tools needed.",
-            "",
-            "ONE-COMMAND FIX:",
-            "  winget uninstall OpenJS.NodeJS",
-            "  winget install OpenJS.NodeJS.LTS",
-            "Then CLOSE this window, open a NEW PowerShell, re-run installer.",
-            "",
-            "OR install nvm-windows:",
-            "  winget install CoreyButler.NVMforWindows",
-            "  nvm install 22 ; nvm use 22",
-            "",
-            "Power-user escape (only if VS Build Tools + Python are already installed):",
-            '  $env:SEO_ALLOW_NEW_NODE = "1"; <then re-run installer>'
-        )
+    # Node 22 LTS, 23, 24, 25, 26 all supported by better-sqlite3 12.10.0+
+    # (which is what we ship). No version-blocking - just an info note.
+    if ($nodeMajor -gt 22) {
+        Info "Node $nodeFullVersion is current/non-LTS. better-sqlite3 12.10+ has prebuilts for it - should work fine."
     }
-
     Say "Node $nodeFullVersion detected - supported."
 
     # Pick package manager - enable corepack so pnpm/yarn work without separate install
