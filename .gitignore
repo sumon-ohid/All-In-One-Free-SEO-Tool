@@ -38,3 +38,6 @@ dev-server.err.log
 
 # desktop guides regenerated per install
 *-Welcome.txt
+
+# claude code local settings — per-user
+.claude/settings.local.json
