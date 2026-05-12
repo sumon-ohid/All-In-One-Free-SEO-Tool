@@ -62,6 +62,14 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/**
+ * Sidebar nav after the Phase 2 tool-merge sweep. Tools that were
+ * folded into a unified parent (SXO/GEO/E-E-A-T → Audits, Brand SERP /
+ * Knowledge Panel / Author authority → Brand visibility, etc.) are
+ * no longer listed here. Their URLs still work and they appear in
+ * the All tools grid for discovery — they just don't take a sidebar
+ * slot. Result: 50+ entries → 25 entries.
+ */
 const groups: NavGroup[] = [
   {
     id: "essentials",
@@ -87,7 +95,6 @@ const groups: NavGroup[] = [
       { href: "/digest", label: "Weekly digest", icon: Send },
       { href: "/grader", label: "Instant audit", icon: Sparkles },
       { href: "/agent", label: "AI agent", icon: Bot },
-      { href: "/ask", label: "Ask the tool", icon: Bot },
       { href: "/capacity", label: "Capacity", icon: Gauge },
       { href: "/activity", label: "Activity log", icon: History },
     ],
@@ -99,9 +106,10 @@ const groups: NavGroup[] = [
       { href: "/content", label: "Content overview", icon: FileText },
       { href: "/content/calendar", label: "Content calendar", icon: FileText },
       { href: "/blog", label: "AI blog writer", icon: Wand2 },
-      { href: "/content-decay", label: "Content decay", icon: TrendingDown },
-      { href: "/content-gap", label: "Content gap", icon: GitCompare },
-      { href: "/topic-clusters", label: "Topic clusters", icon: Layers },
+      // GROUP D: Content decay is the most-trafficked of the three
+      // (decay / gap / topic clusters). Pointing here until the
+      // tabbed Content health hub ships; other URLs remain reachable.
+      { href: "/content-decay", label: "Content health", icon: TrendingDown },
       { href: "/title-tests", label: "Title A/B tests", icon: Wand2 },
       { href: "/meta-rewrite", label: "Meta rewrite batch", icon: Wand2 },
     ],
@@ -113,7 +121,6 @@ const groups: NavGroup[] = [
       { href: "/keywords", label: "Tracked keywords", icon: Search },
       { href: "/cannibalization", label: "Cannibalization", icon: GitMerge },
       { href: "/cwv", label: "Core Web Vitals", icon: Gauge },
-      { href: "/landing-perf", label: "Landing-page perf", icon: Gauge },
       { href: "/serp-scans", label: "SERP scans archive", icon: Globe },
     ],
   },
@@ -123,10 +130,7 @@ const groups: NavGroup[] = [
     items: [
       { href: "/backlinks", label: "Backlinks", icon: Link2 },
       { href: "/link-building", label: "Link building", icon: Link2 },
-      { href: "/link-building/prospects", label: "Find prospects", icon: Link2 },
-      { href: "/link-building/library", label: "Library (314 sites)", icon: Globe },
       { href: "/outreach", label: "Outreach", icon: Send },
-      { href: "/outreach/templates", label: "Outreach templates", icon: Send },
       { href: "/broken-links", label: "Broken links", icon: Link2 },
     ],
   },
@@ -145,11 +149,10 @@ const groups: NavGroup[] = [
     title: "Competitors & brand",
     items: [
       { href: "/competitors", label: "Competitors", icon: Network },
-      { href: "/competitors/playbook", label: "Competitor playbook", icon: Network },
-      { href: "/brand-monitor", label: "Brand monitor", icon: Network },
-      { href: "/brand-serp", label: "Brand SERP", icon: Network },
-      { href: "/knowledge-panel", label: "Knowledge Panel", icon: Globe },
-      { href: "/author-authority", label: "Author authority", icon: Users },
+      // GROUP B: Brand SERP / Knowledge Panel / Author authority
+      // folded under a single Brand-monitor entry. Other URLs still
+      // resolve via direct nav + All tools grid.
+      { href: "/brand-monitor", label: "Brand visibility", icon: Network },
       { href: "/compare", label: "Site compare", icon: GitCompare },
     ],
   },
@@ -158,7 +161,8 @@ const groups: NavGroup[] = [
     title: "AI visibility",
     items: [
       { href: "/ai-visibility", label: "AI visibility tracker", icon: Sparkles },
-      { href: "/bot-logs", label: "AI bot logs", icon: Bot },
+      // GROUP G: AI bot logs hidden behind Settings → Advanced (still
+      // reachable via direct URL).
       { href: "/chats", label: "AI chat history", icon: Bot },
     ],
   },
@@ -168,7 +172,6 @@ const groups: NavGroup[] = [
     items: [
       { href: "/monitor", label: "Page monitor", icon: Activity },
       { href: "/snapshots", label: "Snapshots", icon: ImageIcon },
-      { href: "/annotations", label: "Chart annotations", icon: History },
       { href: "/history", label: "Tool run history", icon: History },
       { href: "/algorithm-updates", label: "Algorithm updates", icon: History },
       { href: "/news", label: "SEO news", icon: Newspaper },
@@ -178,10 +181,9 @@ const groups: NavGroup[] = [
     id: "imports",
     title: "Imports",
     items: [
-      { href: "/import", label: "Import screenshot", icon: ScanText },
-      { href: "/capture", label: "Universal capture", icon: Magnet },
-      { href: "/csv-import", label: "CSV import", icon: FileDown },
-      { href: "/image-audit", label: "Image audit", icon: ImageIcon },
+      // GROUP E: 4 import paths consolidated under one Import hub
+      // with tabs. Old URLs still resolve.
+      { href: "/import", label: "Import (all sources)", icon: ScanText },
     ],
   },
   {
