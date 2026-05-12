@@ -19,7 +19,7 @@ export type FriendlyError = {
   githubIssue?: { title: string; body: string };
 };
 
-const REPO = "IamRamgarhia/seo";
+const REPO = "IamRamgarhia/SEO-Tool";
 
 function ghIssueUrl(title: string, body: string): string {
   const u = new URL(`https://github.com/${REPO}/issues/new`);

@@ -72,7 +72,7 @@ async function getLocalSha(): Promise<string | null> {
 async function getRemoteSha(): Promise<string | null> {
   try {
     const res = await fetch(
-      "https://api.github.com/repos/IamRamgarhia/seo/commits/main",
+      "https://api.github.com/repos/IamRamgarhia/SEO-Tool/commits/main",
       {
         headers: { accept: "application/vnd.github+json" },
         cache: "no-store",

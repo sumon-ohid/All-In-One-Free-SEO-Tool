@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-line installer for macOS / Linux. Run via:
-#   curl -fsSL https://raw.githubusercontent.com/IamRamgarhia/seo/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/IamRamgarhia/SEO-Tool/main/install.sh | bash
 #
 # What it does:
 #   1. Downloads the latest code as a ZIP (no git required)
@@ -17,7 +17,7 @@
 set -e
 
 REPO_OWNER="IamRamgarhia"
-REPO_NAME="seo"
+REPO_NAME="SEO-Tool"
 BRANCH="${SEO_BRANCH:-main}"
 ZIP_URL="https://codeload.github.com/$REPO_OWNER/$REPO_NAME/zip/refs/heads/$BRANCH"
 DIR="${SEO_INSTALL_DIR:-$HOME/seo}"
@@ -321,7 +321,7 @@ if [ -d "$DESKTOP" ]; then
     echo "Port conflict?    SEO_PORT=4000 (any free port) before re-running."
     echo ""
     echo "----------------------- DOCS -------------------------"
-    echo "Repo:     https://github.com/IamRamgarhia/seo"
+    echo "Repo:     https://github.com/IamRamgarhia/SEO-Tool"
     echo "Hosting:  $DIR/docs/HOSTING.md"
     echo "README:   $DIR/README.md"
     echo ""

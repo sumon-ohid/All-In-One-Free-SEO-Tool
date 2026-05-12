@@ -150,7 +150,7 @@ export function ProfileMenu() {
               About &amp; support the developer
             </Link>
             <a
-              href="https://github.com/IamRamgarhia/seo"
+              href="https://github.com/IamRamgarhia/SEO-Tool"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5"

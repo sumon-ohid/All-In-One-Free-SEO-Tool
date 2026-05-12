@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-PolyForm_NC_1.0.0-amber.svg)](LICENSE)
 [![Stack](https://img.shields.io/badge/Next.js_16-React_19-cyan.svg)](#-tech-stack)
 [![Self-Hosted](https://img.shields.io/badge/self_hosted-✓-green.svg)](#-install-in-one-command)
-[![Star us](https://img.shields.io/github/stars/IamRamgarhia/seo?style=social)](https://github.com/IamRamgarhia/seo)
+[![Star us](https://img.shields.io/github/stars/IamRamgarhia/SEO-Tool?style=social)](https://github.com/IamRamgarhia/SEO-Tool)
 
 [**⚡ Install**](#-install-in-one-command) · [**💰 How much you save**](#-how-much-you-save) · [**📦 Full feature list**](#-full-feature-list) · [**🔮 Coming soon**](#-coming-soon) · [**🆘 Troubleshooting**](TROUBLESHOOTING.md) · [**❓ FAQ**](#-faq) · [**📜 License**](#-license)
 
@@ -60,17 +60,17 @@ No Git. No Node knowledge. No setup wizard. The installer auto-detects Docker / 
 
 ### 🪟 Windows (PowerShell)
 ```powershell
-iwr -useb https://raw.githubusercontent.com/IamRamgarhia/seo/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/IamRamgarhia/SEO-Tool/main/install.ps1 | iex
 ```
 
 ### 🐧🍎 macOS / Linux
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IamRamgarhia/seo/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/IamRamgarhia/SEO-Tool/main/install.sh | bash
 ```
 
 ### 🐳 Docker manually
 ```bash
-git clone https://github.com/IamRamgarhia/seo.git && cd seo
+git clone https://github.com/IamRamgarhia/SEO-Tool.git && cd seo
 docker compose up -d
 ```
 
@@ -473,7 +473,7 @@ This entire SEO platform (150+ tools, AI daily agent, headless browser pool, whi
 
 Solo-built. No VC. No growth team. Just one developer trying to make pro-grade SEO tooling permanently free for everyone.
 
-**🌐** [dicecodes.com](https://dicecodes.com) · **📧** [Contact@dicecodes.com](mailto:Contact@dicecodes.com) · **🐙** [GitHub](https://github.com/IamRamgarhia/seo)
+**🌐** [dicecodes.com](https://dicecodes.com) · **📧** [Contact@dicecodes.com](mailto:Contact@dicecodes.com) · **🐙** [GitHub](https://github.com/IamRamgarhia/SEO-Tool)
 
 ---
 

@@ -1,5 +1,5 @@
 # One-line installer for Windows. Run via:
-#   iwr -useb https://raw.githubusercontent.com/IamRamgarhia/seo/main/install.ps1 | iex
+#   iwr -useb https://raw.githubusercontent.com/IamRamgarhia/SEO-Tool/main/install.ps1 | iex
 #
 # What it does:
 #   1. Downloads the repo as a ZIP (no git required)
@@ -20,7 +20,7 @@ $ProgressPreference   = "SilentlyContinue"  # speeds up Invoke-WebRequest 5-10x
 
 # ---- config ----------------------------------------------------------------
 $repoOwner   = "IamRamgarhia"
-$repoName    = "seo"
+$repoName    = "SEO-Tool"
 $branch      = if ($env:SEO_BRANCH) { $env:SEO_BRANCH } else { "main" }
 $zipUrl      = "https://codeload.github.com/$repoOwner/$repoName/zip/refs/heads/$branch"
 $dir         = if ($env:SEO_INSTALL_DIR) { $env:SEO_INSTALL_DIR } else { Join-Path $HOME "seo" }
@@ -340,7 +340,7 @@ Port conflict?    `$env:SEO_PORT='4000' (or any free port) before
                   re-running the installer.
 
 ----------------------- DOCS -------------------------
-Repo:     https://github.com/IamRamgarhia/seo
+Repo:     https://github.com/IamRamgarhia/SEO-Tool
 Hosting:  $dir\docs\HOSTING.md
 README:   $dir\README.md
 

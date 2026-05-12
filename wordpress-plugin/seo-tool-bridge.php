@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: SEO Tool Bridge
- * Plugin URI: https://github.com/IamRamgarhia/seo
+ * Plugin URI: https://github.com/IamRamgarhia/SEO-Tool
  * Description: Connects this WordPress site to the self-hosted SEO Tool by DiceCodes. Lets the tool read + write meta titles, descriptions, alt text, schema, and create posts — with full revision history and one-click undo. Compatible with Yoast / Rank Math / All in One SEO.
  * Version: 0.2.0
  * Requires at least: 6.0

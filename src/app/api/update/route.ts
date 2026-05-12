@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 // Required: spawns git + pnpm + reads package.json. Edge can't.
 export const runtime = "nodejs";
 
-const REPO = "IamRamgarhia/seo";
+const REPO = "IamRamgarhia/SEO-Tool";
 const BRANCH = "main";
 
 async function getLocalSha(): Promise<string | null> {
