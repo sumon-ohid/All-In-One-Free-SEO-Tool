@@ -1,5 +1,5 @@
 ============================================================
-   SEO TOOL — START HERE
+   SEO TOOL - START HERE
    Built solo by DiceCodes (https://dicecodes.com)
 ============================================================
 
@@ -10,21 +10,25 @@ The fastest way to use this app:
   Docker:         docker compose up -d          (to stop: docker compose down)
 
 The app opens in your browser at http://localhost:3000
-(or whichever port the installer picked — check the Desktop guide)
+(or whichever port the installer picked - check the Desktop guide)
 
 ------------------------------------------------------------
 KEY FILES IN THIS FOLDER
 ------------------------------------------------------------
 
-  START.cmd / START.sh   <- START — double-click to start the server
-  STOP.cmd  / STOP.sh    <- STOP  — double-click to stop the server
+  START.cmd / START.sh   <- START - double-click to start the server
+  STOP.cmd  / STOP.sh    <- STOP  - double-click to stop the server
+  COLLECT-LOGS.cmd       <- Bundle ALL logs into a zip on your Desktop
+  COLLECT-LOGS.sh           when something breaks (email it to us)
+  install.log            <- Output of the last installer run (errors etc)
+  dev-server.log         <- Live runtime log of the running server
   data.db                <- Your SQLite database
-                            (clients, keywords, audits, reports —
+                            (clients, keywords, audits, reports -
                             BACK THIS UP regularly)
   .seo-encryption-key    <- Decrypts your stored API keys
                             (BACK THIS UP with data.db)
   .env.local             <- Env config (set APP_PASSWORD here)
-  dev-server.log         <- Runtime log — tail this when debugging
+  dev-server.log         <- Runtime log - tail this when debugging
   .dev-server.pid        <- PID of the running server
 
   README.md              <- Full feature list + install + license
@@ -44,6 +48,12 @@ Stop the server           Double-click  STOP.cmd   (Windows)
                                         STOP.sh    (Mac/Linux)
                           Or in app:    Profile menu -> System health -> Shutdown
 
+Something broke?          Double-click  COLLECT-LOGS.cmd  (Windows)
+Need help debugging?                    COLLECT-LOGS.sh   (Mac/Linux)
+                          Creates a zip on your Desktop with all logs
+                          (secrets stripped). Email it to us at
+                          Contact@dicecodes.com.
+
 Update to latest          Re-run the installer one-liner (see README.md)
 Backup                    In app: Settings -> Backup & restore -> Download
 Restore                   Same screen: upload .db file
@@ -57,7 +67,7 @@ FIRST 5 MINUTES (RECOMMENDED)
 ------------------------------------------------------------
 
 1. Open http://localhost:3000 (or your port)
-2. Add a client at /clients/new — paste any domain
+2. Add a client at /clients/new - paste any domain
    (tool auto-detects niche + tech stack)
 3. Pick an AI provider at /settings -> AI:
      - Ollama (free, local, fully offline)
@@ -66,7 +76,7 @@ FIRST 5 MINUTES (RECOMMENDED)
 4. Connect Google at /settings -> Integrations (free GSC + GA4 + PSI)
 5. Run your first audit
 
-Tomorrow: the daily AI agent kicks in automatically — runs ~17
+Tomorrow: the daily AI agent kicks in automatically - runs ~17
 automated jobs per client (rank checks, audit deltas, content
 decay, backlink scans, GBP monitoring, alerts).
 
@@ -96,7 +106,7 @@ Email support:      Contact@dicecodes.com
 LICENSE
 ------------------------------------------------------------
 
-PolyForm Noncommercial 1.0.0 — see LICENSE file.
+PolyForm Noncommercial 1.0.0 - see LICENSE file.
 
   Free for: self-hosting, freelance + agency client work, modifying
   Paid: reselling, paid SaaS hosting, OEM embedding

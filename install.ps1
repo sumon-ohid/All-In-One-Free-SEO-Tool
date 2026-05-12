@@ -27,13 +27,79 @@ $dir         = if ($env:SEO_INSTALL_DIR) { $env:SEO_INSTALL_DIR } else { Join-Pa
 $defaultPort = if ($env:SEO_PORT) { [int]$env:SEO_PORT } else { 3000 }
 $desktop     = Join-Path $HOME "Desktop"
 
+# ---- LOGGING -----------------------------------------------------------------
+# Log everything to BOTH the console AND a file the user can send for support.
+# Start the transcript at a temp location since $dir may not exist yet; we
+# copy it to $dir\install.log at the end (and to the Desktop as a fallback).
+$logPath     = Join-Path $env:TEMP "seo-tool-install.log"
+$desktopLog  = Join-Path $desktop "SEO-Tool-install.log"
+try { Stop-Transcript | Out-Null } catch {}
+try {
+    Start-Transcript -Path $logPath -Force | Out-Null
+} catch {
+    Write-Host "Could not start install transcript: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+# ---- ALWAYS PAUSE BEFORE EXIT ------------------------------------------------
+# If this script runs from a double-click or `iex` and hits Die / throws,
+# the window normally vanishes - user sees nothing. This handler keeps it
+# open and tells them where the log is.
+function Pause-AndCopyLog([bool]$failed) {
+    try { Stop-Transcript | Out-Null } catch {}
+    # Copy log into the install dir (if it exists) AND onto the Desktop
+    # so the user can find it without knowing the install path.
+    try {
+        if (Test-Path $dir) { Copy-Item $logPath (Join-Path $dir "install.log") -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $desktop) { Copy-Item $logPath $desktopLog -Force -ErrorAction SilentlyContinue }
+    } catch {}
+    Write-Host ""
+    if ($failed) {
+        Write-Host "============================================================" -ForegroundColor Red
+        Write-Host "  INSTALL FAILED" -ForegroundColor Red
+        Write-Host "============================================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Log saved to:"
+        Write-Host "    $logPath"
+        if (Test-Path $desktop) {
+            Write-Host "    $desktopLog  (copy on your Desktop)"
+        }
+        Write-Host ""
+        Write-Host "  To get help, email this log to: Contact@dicecodes.com"
+        Write-Host "  Or open an issue with the log attached:"
+        Write-Host "    https://github.com/IamRamgarhia/SEO-Tool/issues"
+    } else {
+        Write-Host "============================================================" -ForegroundColor Green
+        Write-Host "  INSTALL FINISHED" -ForegroundColor Green
+        Write-Host "============================================================" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "  Log saved to:  $logPath"
+        Write-Host "  Also copied to: $desktopLog"
+    }
+    Write-Host ""
+    # Only pause if running interactively (skip in CI / piped contexts)
+    if ([Environment]::UserInteractive -and $Host.UI.RawUI) {
+        try { Read-Host "Press Enter to close this window" } catch {}
+    }
+}
+
 function Say($m)  { Write-Host "-> $m" -ForegroundColor Green }
 function Info($m) { Write-Host "i  $m" -ForegroundColor Cyan }
 function Warn($m) { Write-Host "!  $m" -ForegroundColor Yellow }
-function Die($m)  { Write-Host "X  $m" -ForegroundColor Red; exit 1 }
+function Die($m)  { Write-Host "X  $m" -ForegroundColor Red; Pause-AndCopyLog $true; exit 1 }
+
+# Trap for unhandled errors - keeps the window open even when something
+# crashes unexpectedly (PowerShell parse errors, .NET exceptions, etc.)
+trap {
+    Write-Host ""
+    Write-Host "X  Unhandled error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   At: $($_.InvocationInfo.PositionMessage)" -ForegroundColor Red
+    Pause-AndCopyLog $true
+    exit 1
+}
 
 Say "SEO Tool installer"
 Info "Install location: $dir"
+Info "Install log: $logPath"
 
 # ---- 1. download / refresh repo via ZIP (no git required) -------------------
 $tmpZip = Join-Path $env:TEMP "seo-tool-$(Get-Random).zip"
@@ -483,3 +549,6 @@ Write-Host ""
 Write-Host "Open:    $url"
 if (Test-Path $welcome) { Write-Host "Guide:   $welcome" }
 Write-Host ""
+
+# Stop transcript + save log copies + pause so the window doesn't auto-close
+Pause-AndCopyLog $false

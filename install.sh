@@ -24,6 +24,51 @@ DIR="${SEO_INSTALL_DIR:-$HOME/seo}"
 DEFAULT_PORT="${SEO_PORT:-3000}"
 DESKTOP="$HOME/Desktop"
 
+# ---- LOGGING -----------------------------------------------------------------
+# Capture all install output to a log file the user can send for support.
+# The temp log is created BEFORE the install dir exists; we copy it to
+# $DIR/install.log + Desktop at the end.
+LOG="$(mktemp -t seo-tool-install.XXXXXX.log)"
+DESKTOP_LOG="$HOME/Desktop/SEO-Tool-install.log"
+
+# Redirect ALL stdout + stderr through `tee -a "$LOG"` so the user sees
+# output live AND it's saved to the log file.
+exec > >(tee -a "$LOG") 2>&1
+
+# On any exit (success OR failure), copy the log to discoverable locations
+# and pause so the user can read the result before the terminal closes.
+on_exit() {
+  local rc=$?
+  if [ -d "$DIR" ]; then cp "$LOG" "$DIR/install.log" 2>/dev/null || true; fi
+  if [ -d "$DESKTOP" ]; then cp "$LOG" "$DESKTOP_LOG" 2>/dev/null || true; fi
+  echo ""
+  if [ "$rc" -ne 0 ]; then
+    echo "============================================================"
+    echo "  INSTALL FAILED (exit code $rc)"
+    echo "============================================================"
+    echo ""
+    echo "  Log saved to: $LOG"
+    [ -d "$DESKTOP" ] && echo "  Also at:      $DESKTOP_LOG  (copy on your Desktop)"
+    echo ""
+    echo "  To get help, email this log to: Contact@dicecodes.com"
+    echo "  Or open an issue with the log attached:"
+    echo "    https://github.com/IamRamgarhia/SEO-Tool/issues"
+  else
+    echo "============================================================"
+    echo "  INSTALL FINISHED"
+    echo "============================================================"
+    echo ""
+    echo "  Log saved to:  $LOG"
+    [ -d "$DESKTOP" ] && echo "  Also copied to: $DESKTOP_LOG"
+  fi
+  echo ""
+  # Pause if we have a TTY (skip for CI / piped runs)
+  if [ -t 0 ]; then
+    read -p "Press Enter to close..." _ 2>/dev/null || true
+  fi
+}
+trap on_exit EXIT
+
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
