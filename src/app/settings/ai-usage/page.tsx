@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
 
-import { gte, desc, sql as drizzleSql } from "drizzle-orm";
-import { Activity, Coins, Zap } from "lucide-react";
+import { gte, desc, eq, sql as drizzleSql, count, sum } from "drizzle-orm";
+import { Activity, Coins, Users, Zap } from "lucide-react";
+import Link from "next/link";
 import { db } from "@/db/client";
-import { aiCalls } from "@/db/schema";
+import { aiCalls, clients } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import { microsToDisplay } from "@/lib/ai-cost";
 import { getSetting } from "@/lib/settings-store";
@@ -68,6 +69,31 @@ export default async function AiUsagePage() {
   const providerRows = Array.from(byProvider.entries())
     .map(([k, v]) => ({ provider: k, ...v }))
     .sort((a, b) => b.cost - a.cost);
+
+  // Per-client breakdown — full SQL aggregation (not limited to the
+  // 500-row recentCalls window), so high-volume clients show their
+  // real footprint even when other clients dominate the recent list.
+  // Joins clients table for names; orphaned client_id rows show as "—".
+  const perClientRaw = await db
+    .select({
+      clientId: aiCalls.clientId,
+      clientName: clients.name,
+      calls: count(aiCalls.id),
+      cost: sum(aiCalls.costMicros),
+      tokens: sum(aiCalls.totalTokens),
+    })
+    .from(aiCalls)
+    .leftJoin(clients, eq(aiCalls.clientId, clients.id))
+    .where(gte(aiCalls.createdAt, since))
+    .groupBy(aiCalls.clientId)
+    .orderBy(desc(sum(aiCalls.costMicros)));
+  const clientRows = perClientRaw.map((r) => ({
+    clientId: r.clientId,
+    clientName: r.clientName ?? (r.clientId === null ? "Workspace-wide" : "(deleted client)"),
+    calls: Number(r.calls ?? 0),
+    cost: Number(r.cost ?? 0),
+    tokens: Number(r.tokens ?? 0),
+  }));
 
   // Daily sparkline
   const days: { day: string; calls: number; cost: number }[] = [];
@@ -223,6 +249,51 @@ export default async function AiUsagePage() {
                 </span>
               </li>
             ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Per client. Critical for agencies — see which clients are
+          actually driving the AI bill, then either rein them in,
+          bill them through, or upgrade the plan. Full-table SQL
+          aggregation so high-volume clients aren't truncated. */}
+      {clientRows.length > 0 && (
+        <section className="glass-apple relative overflow-hidden rounded-2xl">
+          <header className="border-b border-white/[0.06] px-5 py-3 flex items-center gap-2">
+            <Users className="size-4 text-cyan-300" />
+            <h2 className="text-sm font-semibold">Cost by client</h2>
+            <span className="text-[10px] text-muted-foreground">
+              (last 30d, full aggregation)
+            </span>
+          </header>
+          <ul className="divide-y divide-white/[0.05]">
+            {clientRows.map((r) => {
+              const row = (
+                <span className="flex items-center justify-between gap-3 px-5 py-2.5 text-xs">
+                  <span className="font-medium">{r.clientName}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {r.calls} calls · {r.tokens.toLocaleString()} tok ·{" "}
+                    <span className="font-medium text-foreground">
+                      {microsToDisplay(r.cost)}
+                    </span>
+                  </span>
+                </span>
+              );
+              return (
+                <li key={r.clientId ?? "workspace"}>
+                  {r.clientId ? (
+                    <Link
+                      href={`/clients/${r.clientId}`}
+                      className="block hover:bg-white/[0.02]"
+                    >
+                      {row}
+                    </Link>
+                  ) : (
+                    row
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

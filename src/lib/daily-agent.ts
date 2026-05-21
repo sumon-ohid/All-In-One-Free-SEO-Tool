@@ -100,6 +100,16 @@ async function runDailyAgentBody(): Promise<DailyAgentReport> {
   return { startedAt, finishedAt, steps };
 }
 
+/**
+ * Per-step hard timeout. Without it, any step that hangs (slow remote
+ * SERP scrape, stalled AI provider, locked DB) freezes the entire
+ * daily agent until the Node process is restarted. 5 minutes is long
+ * enough for the heaviest legitimate step (weeklyRankSweep can chew
+ * through hundreds of keywords) and short enough that a stuck step
+ * doesn't lock out the rest of the chain.
+ */
+const STEP_TIMEOUT_MS = 5 * 60_000;
+
 async function runStep(
   out: DailyAgentReport["steps"],
   name: string,
@@ -107,11 +117,24 @@ async function runStep(
 ): Promise<void> {
   const t = Date.now();
   try {
-    const detail = await fn();
+    const result = await Promise.race<string | undefined | void>([
+      fn(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `step "${name}" exceeded ${STEP_TIMEOUT_MS / 1000}s timeout`,
+              ),
+            ),
+          STEP_TIMEOUT_MS,
+        ),
+      ),
+    ]);
     out.push({
       name,
       ok: true,
-      detail: typeof detail === "string" ? detail : undefined,
+      detail: typeof result === "string" ? result : undefined,
       durationMs: Date.now() - t,
     });
   } catch (err) {
@@ -121,6 +144,19 @@ async function runStep(
       detail: (err as Error).message?.slice(0, 200),
       durationMs: Date.now() - t,
     });
+    // Surface failures in /settings/health so a chronically broken
+    // step is visible instead of just logged in the latest agent run.
+    // Best-effort — logError swallows its own errors.
+    try {
+      const { logError } = await import("./error-log");
+      await logError({
+        source: "worker",
+        context: `daily-agent: ${name}`,
+        error: err,
+      });
+    } catch {
+      // never bubble
+    }
   }
 }
 

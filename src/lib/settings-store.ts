@@ -122,7 +122,20 @@ export type SettingKey =
   | "autobackup.retention"
   | "autobackup.last_run_at"
   | "autobackup.last_bytes"
-  | "autobackup.last_error";
+  | "autobackup.last_error"
+  // Retention / cleanup. Default ON. Periodically deletes screenshots,
+  // ai_calls, activity_log, and system_errors older than the
+  // configured age. Audits + audit_issues are NEVER touched
+  // (historical record). See src/lib/retention-cleanup.ts.
+  | "retention.enabled"
+  | "retention.cadence_hours"
+  | "retention.screenshots_days"
+  | "retention.ai_calls_days"
+  | "retention.activity_days"
+  | "retention.errors_days"
+  | "retention.last_run_at"
+  | "retention.last_summary"
+  | "retention.last_error";
 
 export async function getSetting<T = unknown>(
   key: SettingKey,

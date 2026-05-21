@@ -38,6 +38,7 @@ import {
 import { tickDailyAgent } from "@/lib/daily-agent";
 import { tickWeeklyDigestRunner } from "@/lib/weekly-digest";
 import { tickAutoBackup } from "@/lib/auto-backup";
+import { tickRetentionCleanup } from "@/lib/retention-cleanup";
 import { redirect } from "next/navigation";
 import { getSetting } from "@/lib/settings-store";
 import { FreshnessBadge } from "@/components/ui/freshness-badge";
@@ -73,6 +74,7 @@ export default async function DashboardPage() {
   try { tickDailyAgent().catch(() => {}); } catch {}
   try { tickWeeklyDigestRunner().catch(() => {}); } catch {}
   try { tickAutoBackup().catch(() => {}); } catch {}
+  try { tickRetentionCleanup().catch(() => {}); } catch {}
 
   const [{ value: clientCount }] = await db
     .select({ value: count() })
