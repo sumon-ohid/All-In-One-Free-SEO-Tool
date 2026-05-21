@@ -37,6 +37,8 @@ import {
 } from "@/lib/report-mailer";
 import { tickDailyAgent } from "@/lib/daily-agent";
 import { tickWeeklyDigestRunner } from "@/lib/weekly-digest";
+import { redirect } from "next/navigation";
+import { getSetting } from "@/lib/settings-store";
 
 const priorityVariant: Record<
   string,
@@ -127,6 +129,18 @@ export default async function DashboardPage() {
 
   const isFresh = clientCount === 0;
   const greeting = greetingForHour(new Date().getHours());
+
+  // First-run gate. A genuinely fresh workspace lands on /welcome where
+  // the stepper makes the next action obvious. Once the user clicks
+  // "Skip & explore" (or completes any step that creates a client / AI
+  // provider), the dismissed_at flag is set and they never see the gate
+  // again. Re-running /welcome any time via the nav still works.
+  if (isFresh) {
+    const dismissedAt = await getSetting<string>("onboarding.dismissed_at").catch(() => null);
+    if (!dismissedAt) {
+      redirect("/welcome");
+    }
+  }
 
   // Latest score across all completed audits (for hero gauge)
   const completedAudits = recentAudits.filter(

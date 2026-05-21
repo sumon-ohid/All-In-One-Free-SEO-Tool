@@ -109,7 +109,12 @@ export type SettingKey =
   | "digest.recipient_email"
   | "digest.auto_send_enabled"
   | "digest.last_sent_at"
-  | "digest.last_auto_run_at";
+  | "digest.last_auto_run_at"
+  // First-run wizard gate. ISO timestamp written when the user clicks
+  // "Skip for now" on /welcome OR completes any meaningful step (adding
+  // a client / configuring an AI provider clears the fresh state
+  // naturally). Once set, the dashboard never redirects to /welcome again.
+  | "onboarding.dismissed_at";
 
 export async function getSetting<T = unknown>(
   key: SettingKey,

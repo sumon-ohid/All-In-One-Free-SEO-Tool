@@ -28,8 +28,16 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { configuredProviders } from "@/lib/api-keys";
 import { getGoogleConnectionStatus } from "@/lib/google-oauth";
+import { setSetting } from "@/lib/settings-store";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+async function dismissAndGoHome() {
+  "use server";
+  await setSetting("onboarding.dismissed_at", new Date().toISOString());
+  redirect("/");
+}
 
 export default async function WelcomePage() {
   const [
@@ -155,6 +163,19 @@ export default async function WelcomePage() {
       <section className="rounded-lg border border-border bg-card p-6">
         <Stepper steps={steps} />
       </section>
+
+      {/* Skip-and-explore escape hatch. Honors "value before asking for
+          anything" — the user can dismiss the gate at any step and the
+          dashboard will stop redirecting them here on every visit. They
+          can still come back to /welcome any time from the nav. */}
+      <form action={dismissAndGoHome} className="flex justify-center">
+        <button
+          type="submit"
+          className="text-[12px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Skip for now and explore the dashboard →
+        </button>
+      </form>
 
       {doneCount === total && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-[13px]">
