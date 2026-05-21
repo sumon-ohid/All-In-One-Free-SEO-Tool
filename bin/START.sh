@@ -76,15 +76,26 @@ port_in_use() {
 }
 
 if port_in_use "$PORT"; then
-  echo "Port $PORT is occupied by another process. Picking a free fallback port..."
-  for try in 3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 8080 8081 4000 5000; do
-    if ! port_in_use "$try"; then
-      PORT="$try"
+  echo "Port $PORT is occupied by another process. Picking a free port..."
+  # Prefer the canonical Node picker — uses the ephemeral-range strategy.
+  if command -v node >/dev/null 2>&1 && [ -f scripts/pick-port.cjs ]; then
+    NEW_PORT="$(node scripts/pick-port.cjs --reroll 2>/dev/null || true)"
+    if [[ "$NEW_PORT" =~ ^[0-9]+$ ]]; then
+      PORT="$NEW_PORT"
       echo "  using port $PORT"
-      echo "$PORT" > .seo-port
-      break
     fi
-  done
+  else
+    # Pure-bash fallback (Node should always be present by this point,
+    # but a defensive path for first-boot weirdness).
+    for try in 3001 3002 3003 3004 3005 8080 8081 4000 5000; do
+      if ! port_in_use "$try"; then
+        PORT="$try"
+        echo "  using port $PORT"
+        echo "$PORT" > .seo-port
+        break
+      fi
+    done
+  fi
 fi
 
 # ---- 4. Stop any prior server we own (idempotent re-run)

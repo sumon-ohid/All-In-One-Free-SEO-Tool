@@ -146,6 +146,15 @@ cd "$DIR"
 [ -f "$DIR/seo.sh" ] && chmod +x "$DIR/seo.sh" 2>/dev/null || true
 
 # ---- 3. find a free port ----------------------------------------------------
+# Port strategy (see scripts/pick-port.cjs for the canonical impl):
+#   1. If .seo-port already exists, honor it so bookmarks survive upgrades.
+#   2. If SEO_PORT is set, honor that.
+#   3. Otherwise derive a stable port in IANA's ephemeral range (49152-65535)
+#      from a hash of the install path. Different installs get different
+#      ports automatically; never collides with well-known dev defaults
+#      (3000/5173/8000/8080 etc.).
+#   4. Probe upward if the chosen port is busy.
+
 port_in_use() {
   local p="$1"
   if command -v lsof >/dev/null 2>&1; then
@@ -159,22 +168,61 @@ port_in_use() {
   fi
 }
 
-PORT="$DEFAULT_PORT"
-FOUND_FREE_PORT=1
+# Stable port derived from the install path. Same math as pick-port.cjs:
+# sha256(installPath) -> first 4 bytes as uint32 -> 49152 + (n % 16383).
+preferred_port_for_path() {
+  local p="$1"
+  # Prefer shasum (macOS) or sha256sum (Linux). Both available by default.
+  local hex
+  if command -v shasum >/dev/null 2>&1; then
+    hex=$(printf %s "$p" | shasum -a 256 | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    hex=$(printf %s "$p" | sha256sum | awk '{print $1}')
+  else
+    echo "49152"  # fallback to the min of the range; probing will move it
+    return
+  fi
+  # First 8 hex chars = 32 bits, big-endian. Take modulo 16383 + 49152.
+  local n=$((16#${hex:0:8}))
+  echo $(( 49152 + (n % 16383) ))
+}
+
+PORT=""
+EXISTING_PORT_FILE="$DIR/.seo-port"
+if [ -f "$EXISTING_PORT_FILE" ]; then
+  CAND="$(cat "$EXISTING_PORT_FILE" 2>/dev/null | tr -d '[:space:]')"
+  if [[ "$CAND" =~ ^[0-9]+$ ]] && [ "$CAND" -ge 1 ] && [ "$CAND" -le 65535 ]; then
+    PORT="$CAND"
+    info "Using existing port from .seo-port: $PORT"
+  fi
+fi
+
+if [ -z "$PORT" ]; then
+  if [ -n "$SEO_PORT" ]; then
+    PORT="$SEO_PORT"
+    info "Using SEO_PORT from environment: $PORT"
+  else
+    PORT=$(preferred_port_for_path "$DIR")
+    info "Picked stable port $PORT from install path (ephemeral range)"
+  fi
+fi
+
 if port_in_use "$PORT"; then
-  warn "Port $PORT is occupied - finding a free one"
+  warn "Port $PORT is occupied - probing for a free one"
   FOUND_FREE_PORT=0
-  for try in 3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 8080 8081 4000 5000; do
-    if ! port_in_use "$try"; then
-      PORT="$try"
+  START_PORT=$PORT
+  for step in $(seq 1 200); do
+    TRY=$((START_PORT + step))
+    if [ "$TRY" -gt 65535 ]; then TRY=$((49152 + TRY - 65536)); fi
+    if ! port_in_use "$TRY"; then
+      PORT="$TRY"
       FOUND_FREE_PORT=1
       break
     fi
   done
-fi
-
-if [ "$FOUND_FREE_PORT" != "1" ]; then
-  die "No free port in the default range (3000-3010, 8080-81, 4000, 5000). All occupied. Set SEO_PORT=<free port> and re-run."
+  if [ "$FOUND_FREE_PORT" != "1" ]; then
+    die "Could not find a free port in the ephemeral range after 200 probes. Set SEO_PORT=<free port> and re-run."
+  fi
 fi
 
 say "Using port $PORT"
@@ -522,6 +570,76 @@ EOF
 
     # Clean up the old single launcher from previous installs
     [ -f "$DESKTOP/SEO Tool.command" ] && rm -f "$DESKTOP/SEO Tool.command"
+  fi
+fi
+
+# ---- 5b. Auto-start at login (opt-in via SEO_AUTOSTART=1) ------------------
+# macOS: drop a LaunchAgent plist. Linux: drop a systemd-user service.
+# Both run on user login, no sudo / admin required.
+if [ "$SEO_AUTOSTART" = "1" ] && [ "$HAS_DOCKER" != "1" ]; then
+  OS="$(uname -s)"
+  if [ "$OS" = "Darwin" ]; then
+    AGENT_DIR="$HOME/Library/LaunchAgents"
+    AGENT_PATH="$AGENT_DIR/com.dicecodes.seo-tool.plist"
+    mkdir -p "$AGENT_DIR"
+    cat > "$AGENT_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.dicecodes.seo-tool</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$DIR/bin/START.sh</string>
+  </array>
+  <key>WorkingDirectory</key><string>$DIR</string>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$DIR/autostart.log</string>
+  <key>StandardErrorPath</key><string>$DIR/autostart.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SEO_RESTART</key><string>1</string>
+  </dict>
+</dict>
+</plist>
+EOF
+    launchctl unload "$AGENT_PATH" 2>/dev/null || true
+    launchctl load "$AGENT_PATH" 2>/dev/null && say "Registered launchd auto-start: $AGENT_PATH" \
+      || warn "Could not load launchd agent; reboot to take effect or run: launchctl load $AGENT_PATH"
+  elif [ "$OS" = "Linux" ]; then
+    UNIT_DIR="$HOME/.config/systemd/user"
+    UNIT_PATH="$UNIT_DIR/seo-tool.service"
+    mkdir -p "$UNIT_DIR"
+    cat > "$UNIT_PATH" <<EOF
+[Unit]
+Description=SEO Tool (self-hosted)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$DIR
+ExecStart=/bin/bash $DIR/bin/START.sh
+Environment=SEO_RESTART=1
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl --user daemon-reload 2>/dev/null || true
+      systemctl --user enable seo-tool.service 2>/dev/null \
+        && say "Registered systemd-user auto-start: $UNIT_PATH" \
+        || warn "systemctl --user not available; the unit is at $UNIT_PATH for manual enable"
+      # `loginctl enable-linger $USER` (sudo) is needed for the unit to
+      # start without an active login session. We don't sudo silently —
+      # tell the user how to enable it themselves.
+      info "To run when you're NOT logged in (e.g. headless server):"
+      info "  sudo loginctl enable-linger $USER"
+    else
+      warn "No systemctl found; unit written but not enabled: $UNIT_PATH"
+    fi
   fi
 fi
 

@@ -18,7 +18,7 @@ REM   SEO_FORCE_DEV when 1, forces dev mode even if a build exists
 REM   SEO_BIND_HOST default 127.0.0.1; set 0.0.0.0 to expose on LAN
 REM                 (REQUIRES setting APP_PASSWORD in .env.local first)
 
-setlocal
+setlocal EnableDelayedExpansion
 REM This launcher lives in bin/ — all runtime state (.dev-server.pid,
 REM .seo-port, data.db, .next, node_modules) is at the install root,
 REM one level up. cd there so relative paths resolve correctly.
@@ -62,22 +62,30 @@ REM On restart, give the old server a moment to free the port.
 if "%SEO_RESTART%"=="1" timeout /t 2 /nobreak >nul
 
 REM ---- 3b. Is the saved port occupied by SOMETHING ELSE (not us)?
-REM     Walk through the fallback list and pick the first free port.
+REM     Delegate to scripts/pick-port.cjs which uses the stable
+REM     ephemeral-range strategy (49152-65535 hashed from install path).
+REM     Falls back to legacy 3000-range if Node isn't available yet.
 powershell -NoProfile -Command "if ((Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }"
 if %errorlevel%==0 (
-  echo Port %PORT% is occupied by another process. Picking a free fallback port...
-  for %%p in (3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 8080 8081 4000 5000) do (
-    powershell -NoProfile -Command "if ((Get-NetTCPConnection -LocalPort %%p -State Listen -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }"
-    if errorlevel 1 (
-      set "PORT=%%p"
-      echo   using port %%p
-      echo %%p> .seo-port
-      goto :port_found
+  echo Port %PORT% is occupied by another process. Picking a free port...
+  where node >nul 2>&1
+  if !errorlevel!==0 (
+    for /f "tokens=*" %%P in ('node scripts/pick-port.cjs --reroll 2^>nul') do set "PORT=%%P"
+  ) else (
+    REM Pure-cmd fallback: try a small range of well-known ports.
+    for %%p in (3001 3002 3003 3004 3005 8080 8081 4000 5000) do (
+      powershell -NoProfile -Command "if ((Get-NetTCPConnection -LocalPort %%p -State Listen -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }"
+      if errorlevel 1 (
+        set "PORT=%%p"
+        echo %%p> .seo-port
+        goto :port_found
+      )
     )
+    echo No free port found. Set PORT manually before re-running.
+    pause
+    exit /b 1
   )
-  echo No free port found. Set PORT manually before re-running.
-  pause
-  exit /b 1
+  echo   using port %PORT%
 )
 :port_found
 

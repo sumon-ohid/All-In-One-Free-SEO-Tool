@@ -188,6 +188,16 @@ Remove-Item -Path $tmpExtract -Recurse -Force -ErrorAction SilentlyContinue
 Set-Location $dir
 
 # ---- 2. find a free port ----------------------------------------------------
+# Port strategy (see scripts/pick-port.cjs for the canonical impl):
+#   1. If .seo-port already exists (re-install / upgrade), honor it so
+#      the user's bookmark keeps working.
+#   2. If user passed SEO_PORT, honor that.
+#   3. Otherwise derive a stable port inside IANA's ephemeral range
+#      (49152-65535) from a hash of the install path. Different installs
+#      land on different ports automatically, and we never collide with
+#      well-known dev defaults (3000/5173/8000/8080 etc.).
+#   4. If the chosen port is busy, probe upward.
+
 function Test-PortInUse($p) {
     try {
         $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
@@ -195,22 +205,61 @@ function Test-PortInUse($p) {
     } catch { return $false }
 }
 
-$port = $defaultPort
+function Get-PreferredPort($installPath) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($installPath)
+        $hash = $sha.ComputeHash($bytes)
+    } finally {
+        $sha.Dispose()
+    }
+    # Read first 4 bytes as a uint32 (big-endian to match Node version)
+    $n = [uint32]($hash[0]) -shl 24
+    $n = $n -bor ([uint32]($hash[1]) -shl 16)
+    $n = $n -bor ([uint32]($hash[2]) -shl 8)
+    $n = $n -bor [uint32]($hash[3])
+    $EphemeralMin = 49152
+    $EphemeralSpan = 16383
+    return [int]($EphemeralMin + ($n % $EphemeralSpan))
+}
+
+$existingPortFile = Join-Path $dir ".seo-port"
+$port = 0
+if (Test-Path $existingPortFile) {
+    $raw = (Get-Content $existingPortFile -ErrorAction SilentlyContinue) -replace '\s', ''
+    if ($raw -match '^\d+$') {
+        $port = [int]$raw
+        Info "Using existing port from .seo-port: $port"
+    }
+}
+
+if ($port -eq 0) {
+    if ($env:SEO_PORT) {
+        $port = [int]$env:SEO_PORT
+        Info "Using SEO_PORT from environment: $port"
+    } else {
+        $port = Get-PreferredPort $dir
+        Info "Picked stable port $port from install path (ephemeral range)"
+    }
+}
+
+# Probe upward if occupied. Stay inside the ephemeral range; wrap once.
 if (Test-PortInUse $port) {
-    Warn "Port $port is occupied - finding a free one"
-    $foundFreePort = $false
-    foreach ($try in @(3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 8080, 8081, 4000, 5000)) {
+    Warn "Port $port is occupied - probing for a free one"
+    $start = $port
+    $found = $false
+    for ($step = 1; $step -le 200; $step++) {
+        $try = $start + $step
+        if ($try -gt 65535) { $try = 49152 + ($try - 65536) }
         if (-not (Test-PortInUse $try)) {
             $port = $try
-            $foundFreePort = $true
+            $found = $true
             break
         }
     }
-    if (-not $foundFreePort) {
+    if (-not $found) {
         DieMulti @(
-            "No free port found in the default range (3000-3010, 8080-81, 4000, 5000).",
-            "All of them are occupied - you have a lot of other servers running.",
-            "",
+            "Could not find a free port in the ephemeral range after 200 probes.",
             "Set SEO_PORT to a known-free port and re-run, e.g.:",
             '  $env:SEO_PORT = "7777"',
             "  iwr -useb https://raw.githubusercontent.com/IamRamgarhia/SEO-Tool/main/install.ps1 | iex"
@@ -668,6 +717,30 @@ if ((Test-Path $desktop) -and (-not $hasDocker)) {
         }
     } catch {
         Warn "Couldn't create desktop shortcuts: $($_.Exception.Message)"
+    }
+}
+
+# ---- 5b. Auto-start at login (opt-in via SEO_AUTOSTART=1) -------------------
+# Registers a per-user scheduled task that runs START.cmd at logon. No admin
+# rights needed; safe for any standard user account. Skip on Docker (Docker
+# Desktop handles container auto-restart via its own settings).
+if (-not $hasDocker -and $env:SEO_AUTOSTART -eq "1") {
+    try {
+        $taskName = "SEO Tool - Start at login"
+        $startCmd = Join-Path $dir "bin\START.cmd"
+        if (Test-Path $startCmd) {
+            # Remove any existing task by the same name so re-install replaces it
+            try { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+            $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$startCmd`"" -WorkingDirectory $dir
+            $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
+            Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Starts the SEO Tool dev server at user logon." | Out-Null
+            Say "Registered auto-start task: $taskName"
+        } else {
+            Warn "SEO_AUTOSTART set but $startCmd not found - skipped"
+        }
+    } catch {
+        Warn "Could not register auto-start task: $($_.Exception.Message)"
     }
 }
 
