@@ -39,6 +39,7 @@ import { tickDailyAgent } from "@/lib/daily-agent";
 import { tickWeeklyDigestRunner } from "@/lib/weekly-digest";
 import { redirect } from "next/navigation";
 import { getSetting } from "@/lib/settings-store";
+import { FreshnessBadge } from "@/components/ui/freshness-badge";
 
 const priorityVariant: Record<
   string,
@@ -219,8 +220,16 @@ export default async function DashboardPage() {
           <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-4">
             <ScoreGauge score={latestScore} />
             <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">
-                Latest audit
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span>Latest audit</span>
+                <FreshnessBadge
+                  capturedAt={
+                    recentAudits[0]?.completedAt ??
+                    recentAudits[0]?.createdAt ??
+                    null
+                  }
+                  source="Audit"
+                />
               </div>
               <div className="text-sm font-medium text-foreground">
                 {recentAudits[0]?.clientName ?? "—"}
