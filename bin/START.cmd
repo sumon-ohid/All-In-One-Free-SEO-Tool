@@ -50,12 +50,29 @@ if %errorlevel%==0 (
   )
 )
 
-REM ---- 3. Already running on this port? (our server responds on /api/v1/health)
-powershell -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT%/api/v1/health -TimeoutSec 1).StatusCode | Out-Null; exit 0 } catch { exit 1 }"
-if %errorlevel%==0 (
-  echo SEO Tool is already running on port %PORT%.
-  if not "%SEO_RESTART%"=="1" start "" "http://localhost:%PORT%"
-  exit /b 0
+REM ---- 3. Already running on this port? Distinguish OURS vs a SIBLING
+REM     install. /api/v1/health reports its installRoot; if it doesn't
+REM     match this install dir, someone else is on this port — pick a
+REM     new one rather than opening THEIR data in the user's browser.
+set "MY_ROOT=%CD%"
+for /f "tokens=*" %%R in ('powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT%/api/v1/health -TimeoutSec 2 -ErrorAction Stop; $j = $r.Content ^| ConvertFrom-Json; if ($j.installRoot) { Write-Output $j.installRoot } } catch {}"') do set "REMOTE_ROOT=%%R"
+if defined REMOTE_ROOT (
+  REM Case-insensitive compare for Windows paths
+  if /I "!REMOTE_ROOT!"=="!MY_ROOT!" (
+    echo SEO Tool is already running on port %PORT%.
+    if not "%SEO_RESTART%"=="1" start "" "http://localhost:%PORT%"
+    exit /b 0
+  ) else (
+    echo Port %PORT% is already serving a DIFFERENT SEO Tool install at:
+    echo   !REMOTE_ROOT!
+    echo Picking a new port for this install...
+    where node >nul 2>&1
+    if !errorlevel!==0 (
+      for /f "tokens=*" %%P in ('node scripts/pick-port.cjs --reroll 2^>nul') do set "PORT=%%P"
+      echo Using port !PORT!.
+      set "REMOTE_ROOT="
+    )
+  )
 )
 
 REM On restart, give the old server a moment to free the port.

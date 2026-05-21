@@ -44,18 +44,45 @@ else
 fi
 
 health_url="http://localhost:$PORT/api/v1/health"
+INSTALL_ROOT="$(pwd)"
 
-# ---- 3. Already running on this port? (our server responds on /api/v1/health)
-if curl -fsS -o /dev/null --max-time 1 "$health_url" 2>/dev/null; then
-  echo "SEO Tool is already running on port $PORT."
-  if [ "$SEO_RESTART" != "1" ]; then
-    if command -v open >/dev/null 2>&1; then
-      open "http://localhost:$PORT" 2>/dev/null || true
-    elif command -v xdg-open >/dev/null 2>&1; then
-      xdg-open "http://localhost:$PORT" 2>/dev/null || true
+# ---- 3. Already running on this port? Distinguish OURS vs a SIBLING
+# install. The health endpoint reports its `installRoot`; if that
+# doesn't match ours, someone ELSE's SEO Tool is on this port and we
+# should pick a different one instead of opening THEIR data in our
+# user's browser.
+HEALTH_BODY="$(curl -fsS --max-time 2 "$health_url" 2>/dev/null || true)"
+if [ -n "$HEALTH_BODY" ]; then
+  # Cheap JSON extraction — match "installRoot":"..."
+  REMOTE_ROOT="$(printf '%s' "$HEALTH_BODY" | sed -n 's/.*"installRoot":"\([^"]*\)".*/\1/p')"
+  # Normalize slashes for cross-platform compare (the server may report
+  # an OS-specific path; bash's INSTALL_ROOT uses forward slashes).
+  REMOTE_ROOT_NORM="${REMOTE_ROOT//\\//}"
+  LOCAL_ROOT_NORM="${INSTALL_ROOT//\\//}"
+  if [ -n "$REMOTE_ROOT_NORM" ] && [ "$REMOTE_ROOT_NORM" != "$LOCAL_ROOT_NORM" ]; then
+    echo "Port $PORT is already serving a DIFFERENT SEO Tool install at:"
+    echo "  $REMOTE_ROOT"
+    echo "Picking a new port for this install..."
+    # Force pick-port.cjs to reroll; it writes a new .seo-port for us.
+    if command -v node >/dev/null 2>&1 && [ -f scripts/pick-port.cjs ]; then
+      NEW_PORT="$(node scripts/pick-port.cjs --reroll 2>/dev/null || true)"
+      if [[ "$NEW_PORT" =~ ^[0-9]+$ ]]; then
+        PORT="$NEW_PORT"
+        health_url="http://localhost:$PORT/api/v1/health"
+        echo "Using port $PORT."
+      fi
     fi
+  else
+    echo "SEO Tool is already running on port $PORT."
+    if [ "$SEO_RESTART" != "1" ]; then
+      if command -v open >/dev/null 2>&1; then
+        open "http://localhost:$PORT" 2>/dev/null || true
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "http://localhost:$PORT" 2>/dev/null || true
+      fi
+    fi
+    exit 0
   fi
-  exit 0
 fi
 
 # Restart? Give the old server a beat to free the port.

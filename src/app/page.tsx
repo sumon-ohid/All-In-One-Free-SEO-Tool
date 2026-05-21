@@ -37,6 +37,7 @@ import {
 } from "@/lib/report-mailer";
 import { tickDailyAgent } from "@/lib/daily-agent";
 import { tickWeeklyDigestRunner } from "@/lib/weekly-digest";
+import { tickAutoBackup } from "@/lib/auto-backup";
 import { redirect } from "next/navigation";
 import { getSetting } from "@/lib/settings-store";
 import { FreshnessBadge } from "@/components/ui/freshness-badge";
@@ -71,6 +72,7 @@ export default async function DashboardPage() {
   try { tickPageMonitorRunner().catch(() => {}); } catch {}
   try { tickDailyAgent().catch(() => {}); } catch {}
   try { tickWeeklyDigestRunner().catch(() => {}); } catch {}
+  try { tickAutoBackup().catch(() => {}); } catch {}
 
   const [{ value: clientCount }] = await db
     .select({ value: count() })

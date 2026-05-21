@@ -114,7 +114,15 @@ export type SettingKey =
   // "Skip for now" on /welcome OR completes any meaningful step (adding
   // a client / configuring an AI provider clears the fresh state
   // naturally). Once set, the dashboard never redirects to /welcome again.
-  | "onboarding.dismissed_at";
+  | "onboarding.dismissed_at"
+  // Daily auto-backup. Default ON. The user can disable from /settings/backup
+  // if they prefer to manage backups externally (Restic / Borg / Time Machine).
+  | "autobackup.enabled"
+  | "autobackup.cadence_hours"
+  | "autobackup.retention"
+  | "autobackup.last_run_at"
+  | "autobackup.last_bytes"
+  | "autobackup.last_error";
 
 export async function getSetting<T = unknown>(
   key: SettingKey,

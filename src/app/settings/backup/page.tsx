@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { RestoreForm } from "./restore-form";
+import { AutoBackupCard } from "./auto-backup-card";
+import { getSetting } from "@/lib/settings-store";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,23 @@ export default async function BackupPage() {
   const dbExists = existsSync(dbAbs);
   const dbSize = dbExists ? statSync(dbAbs).size : 0;
   const dbMtime = dbExists ? statSync(dbAbs).mtime : null;
+
+  // Auto-backup status (defaults: enabled, 24h cadence, keep 7).
+  const [
+    autoEnabled,
+    autoCadence,
+    autoRetention,
+    autoLastRun,
+    autoLastBytes,
+    autoLastErr,
+  ] = await Promise.all([
+    getSetting<boolean>("autobackup.enabled"),
+    getSetting<number>("autobackup.cadence_hours"),
+    getSetting<number>("autobackup.retention"),
+    getSetting<string>("autobackup.last_run_at"),
+    getSetting<number>("autobackup.last_bytes"),
+    getSetting<string>("autobackup.last_error"),
+  ]);
 
   // Look for prior backup files (.bak-...) in the same folder
   const dir = path.dirname(dbAbs);
@@ -110,6 +129,15 @@ export default async function BackupPage() {
           new machine, then upload it via Restore below. Done.
         </p>
       </section>
+
+      <AutoBackupCard
+        enabled={autoEnabled !== false}
+        cadenceHours={typeof autoCadence === "number" && autoCadence > 0 ? autoCadence : 24}
+        retention={typeof autoRetention === "number" && autoRetention > 0 ? autoRetention : 7}
+        lastRunIso={autoLastRun ?? null}
+        lastBytes={typeof autoLastBytes === "number" ? autoLastBytes : null}
+        lastError={autoLastErr || null}
+      />
 
       {/* Per-area CSV exports */}
       <section className="glass-apple relative overflow-hidden rounded-2xl p-5 space-y-3">
