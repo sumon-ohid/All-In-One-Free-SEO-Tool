@@ -17,6 +17,7 @@ import {
 import { db } from "@/db/client";
 import { automations, clients } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 import { NewAutomationForm } from "./new-form";
 import { WebhookTester } from "./webhook-tester";
 import { deleteAutomation, setAutomationEnabled } from "./actions";
@@ -114,9 +115,14 @@ export default async function AutomationsPage() {
       <NewAutomationForm clients={allClients} />
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-white/5 bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground backdrop-blur-md">
-          No automations yet. Try one like &ldquo;When score drops, create a
-          high-priority task.&rdquo;
+        <div className="rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">
+          <EmptyState
+            icon={Workflow}
+            title="No automations yet"
+            body="If-this-then-that rules across audits, rankings, content, and outreach. Replaces a Zapier subscription for SEO-shaped workflows."
+            primary={{ href: "/automations/templates", label: "Browse 8 templates" }}
+            secondary={{ href: "/automations/new", label: "Build from scratch" }}
+          />
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">

@@ -12,6 +12,7 @@ import { AddBacklinkForm } from "@/app/backlinks/add-form";
 import { LogLinkForm } from "@/app/backlinks/log-link-form";
 import { setBacklinkStatus, deleteBacklink } from "@/app/backlinks/actions";
 import { ClientInfoCard } from "@/components/client-info-card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const statusTone: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
@@ -127,9 +128,14 @@ export default async function PerClientBacklinksPage({
       </div>
 
       {rows.length === 0 ? (
-        <div className="glass-apple relative overflow-hidden rounded-2xl px-6 py-12 text-center text-sm text-muted-foreground">
-          No backlinks tracked yet. Add some above, or connect Google Search
-          Console (Settings → Google) to pull them in automatically.
+        <div className="glass-apple relative overflow-hidden rounded-2xl">
+          <EmptyState
+            icon={Link2}
+            title="No backlinks tracked yet"
+            body="Add some above, connect Google Search Console for auto-pull, or use the Ahrefs WMT CSV import for fuller coverage."
+            primary={{ href: "/settings/google", label: "Connect GSC" }}
+            secondary={{ href: "/backlinks", label: "Ahrefs WMT import" }}
+          />
         </div>
       ) : (
         <section className="overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">

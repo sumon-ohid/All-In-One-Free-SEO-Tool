@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { AddOutreachForm } from "@/app/outreach/add-form";
 import { ComposeButton } from "@/app/outreach/compose-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   setContactStatus,
   deleteOutreachContact,
@@ -127,8 +128,12 @@ export default async function PerClientOutreachPage({
       <AddOutreachForm clients={[{ id: client.id, name: client.name }]} />
 
       {rows.length === 0 ? (
-        <div className="glass-apple relative overflow-hidden rounded-2xl px-6 py-12 text-center text-sm text-muted-foreground">
-          No outreach contacts yet. Add prospects above to start your campaign.
+        <div className="glass-apple relative overflow-hidden rounded-2xl">
+          <EmptyState
+            icon={Send}
+            title="No outreach contacts yet"
+            body="Add prospects above to start tracking your link-building / guest-post / digital-PR pipeline. Templates, status, and click-tracking included."
+          />
         </div>
       ) : (
         <section className="overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">

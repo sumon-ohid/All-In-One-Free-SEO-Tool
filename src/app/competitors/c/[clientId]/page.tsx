@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { AddCompetitorForm } from "@/app/competitors/add-form";
 import { deleteCompetitor } from "@/app/competitors/actions";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function PerClientCompetitorsPage({
   params,
@@ -63,9 +64,12 @@ export default async function PerClientCompetitorsPage({
       <AddCompetitorForm clients={[{ id: client.id, name: client.name }]} />
 
       {rows.length === 0 ? (
-        <div className="glass-apple relative overflow-hidden rounded-2xl px-6 py-12 text-center text-sm text-muted-foreground">
-          No competitors tracked yet. Add a few above to start mapping the
-          landscape.
+        <div className="glass-apple relative overflow-hidden rounded-2xl">
+          <EmptyState
+            icon={Network}
+            title="No competitors tracked yet"
+            body="Add 3-5 competitors above to compare keyword overlap, backlink delta, content cadence, and SERP share-of-voice for this client."
+          />
         </div>
       ) : (
         <section className="overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">

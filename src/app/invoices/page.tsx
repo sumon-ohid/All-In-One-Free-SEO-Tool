@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { clients, invoices } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { invoiceTotals, formatMoney } from "@/lib/invoice-utils";
 
 const statusTone: Record<string, string> = {
@@ -84,9 +85,13 @@ export default async function InvoicesPage() {
       />
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-white/5 bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground backdrop-blur-md">
-          No invoices yet. Click <strong>New invoice</strong> above to draft
-          your first one.
+        <div className="rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">
+          <EmptyState
+            icon={Receipt}
+            title="No invoices yet"
+            body="Draft and send invoices to clients without leaving the tool. Branded PDF, payment terms, multiple line items."
+            primary={{ href: "/invoices/new", label: "Create your first invoice" }}
+          />
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">

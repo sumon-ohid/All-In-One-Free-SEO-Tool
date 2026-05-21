@@ -16,6 +16,7 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { activityLog, clients } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const kindMeta: Record<
   string,
@@ -222,9 +223,14 @@ export default async function ActivityPage({
       </section>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-white/5 bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground backdrop-blur-md">
-          No activity yet. Run an audit, add a client, or log outreach to start
-          building history.
+        <div className="rounded-2xl border border-white/5 bg-card/40 backdrop-blur-md">
+          <EmptyState
+            icon={Activity}
+            title="No activity yet"
+            body="Every audit, ranking change, task completion, and outreach event gets logged here as you work. Add a client to start the timeline."
+            primary={{ href: "/clients/new", label: "Add a client" }}
+            secondary={{ href: "/audits", label: "Run an audit" }}
+          />
         </div>
       ) : (
         Array.from(byDay.entries()).map(([day, list]) => (
