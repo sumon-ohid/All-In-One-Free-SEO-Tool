@@ -47,6 +47,20 @@ export default async function AuditsIndexPage() {
               ? "amber"
               : "rose";
 
+      // Compute freshness label inline. Audits older than a week start
+      // to drift from reality — we surface that to the user so they
+      // know which client cards need a re-run.
+      const lastAt = latest?.completedAt ?? latest?.createdAt ?? null;
+      let freshness = "";
+      if (lastAt) {
+        const ageMs = Date.now() - lastAt.getTime();
+        const days = Math.floor(ageMs / 86_400_000);
+        if (days < 1) freshness = "today";
+        else if (days < 7) freshness = `${days}d ago`;
+        else if (days < 30) freshness = `${Math.floor(days / 7)}w ago — refresh`;
+        else freshness = "stale — refresh";
+      }
+
       return {
         id: c.id,
         name: c.name,
@@ -56,7 +70,7 @@ export default async function AuditsIndexPage() {
         primary: score !== null ? `${score}/100` : "Not yet audited",
         primaryTone: tone,
         secondary: latest
-          ? `${total} audits · last ${(latest.completedAt ?? latest.createdAt).toLocaleDateString()} · ${latest.issuesCount} issues`
+          ? `${total} audits · ${freshness} · ${latest.issuesCount} issues`
           : `${total} audits run`,
       };
     }),

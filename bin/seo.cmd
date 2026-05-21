@@ -8,5 +8,9 @@ if /I "%~1"=="doctor" (
   node bin\seo-doctor.cjs
   exit /b %errorlevel%
 )
+if /I "%~1"=="update" (
+  node bin\seo-update.cjs
+  exit /b %errorlevel%
+)
 endlocal
 call "%~dp0START.cmd" %*

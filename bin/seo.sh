@@ -6,4 +6,7 @@ cd "$(dirname "$0")/.."
 if [ "$1" = "doctor" ]; then
   exec node bin/seo-doctor.cjs
 fi
+if [ "$1" = "update" ]; then
+  exec node bin/seo-update.cjs
+fi
 exec "$(dirname "$0")/START.sh" "$@"
