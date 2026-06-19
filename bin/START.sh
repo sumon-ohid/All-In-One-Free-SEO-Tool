@@ -43,6 +43,71 @@ else
   exit 1
 fi
 
+# ---- 2b. First-run self-bootstrap.
+# Runs ONCE on a freshly-extracted ZIP that's never been installed.
+# Detects missing node_modules / .next / playwright and installs them
+# so double-clicking "Start SEO Tool (Mac).command" on a brand-new
+# machine just works. ~5 min total on first run; no-op thereafter.
+FIRST_RUN_BOOTSTRAP=0
+[ ! -d "node_modules" ] && FIRST_RUN_BOOTSTRAP=1
+[ ! -f ".next/BUILD_ID" ] && FIRST_RUN_BOOTSTRAP=1
+
+if [ "$FIRST_RUN_BOOTSTRAP" = "1" ]; then
+  echo ""
+  echo "============================================================"
+  echo "  First-run setup. This happens once on a fresh extract."
+  echo "  Takes about 5 minutes total. Please keep this open."
+  echo "============================================================"
+  echo ""
+fi
+
+if [ ! -d "node_modules" ]; then
+  echo "[1/3] Installing dependencies via $PM..."
+  echo "      (this is the longest step — 3-5 minutes)"
+  echo ""
+  export NPM_CONFIG_IGNORED_BUILDS_CHECK=false
+  export NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true
+  if [ "$PM" = "pnpm" ]; then
+    $PM install --ignore-scripts --prefer-offline
+  else
+    $PM install --no-audit --no-fund --ignore-scripts
+  fi
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "Dependency install failed. Check messages above."
+    read -p "Press Enter to close..." _
+    exit 1
+  fi
+  $PM rebuild >/dev/null 2>&1 || true
+fi
+
+if [ ! -f ".next/BUILD_ID" ]; then
+  echo ""
+  echo "[2/3] Building production bundle..."
+  echo "      (1-2 min; makes daily boot ~3s instead of ~30s)"
+  echo ""
+  $PM run build || echo "Production build failed; will fall back to dev mode."
+fi
+
+# Playwright chromium — non-blocking (skip-safe if it fails)
+if [ "$FIRST_RUN_BOOTSTRAP" = "1" ]; then
+  if [ ! -d "$HOME/Library/Caches/ms-playwright" ] && [ ! -d "$HOME/.cache/ms-playwright" ]; then
+    echo ""
+    echo "[3/3] Downloading Playwright Chromium (~170 MB, 1-2 min)..."
+    echo "      (used by rank tracker + SERP scanner; skip-safe)"
+    echo ""
+    $PM exec playwright install chromium 2>/dev/null || true
+  fi
+fi
+
+if [ "$FIRST_RUN_BOOTSTRAP" = "1" ]; then
+  echo ""
+  echo "============================================================"
+  echo "  First-run setup complete. Starting server..."
+  echo "============================================================"
+  echo ""
+fi
+
 health_url="http://localhost:$PORT/api/v1/health"
 INSTALL_ROOT="$(pwd)"
 

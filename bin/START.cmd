@@ -50,6 +50,88 @@ if %errorlevel%==0 (
   )
 )
 
+REM ---- 2b. First-run self-bootstrap.
+REM     Runs ONCE on a freshly-extracted ZIP that's never had the
+REM     installer run. Detects missing node_modules / .next / playwright
+REM     and sets them up so double-clicking "Start SEO Tool (Windows).hta"
+REM     on a brand-new PC just works.
+REM
+REM     We use Direct console output (not redirected) so the user SEES
+REM     pnpm install progress in real time. Takes 3-8 min total on
+REM     first run; thereafter every step is a no-op.
+set "FIRST_RUN_BOOTSTRAP=0"
+if not exist "node_modules" set "FIRST_RUN_BOOTSTRAP=1"
+if not exist ".next\BUILD_ID" set "FIRST_RUN_BOOTSTRAP=1"
+
+if "!FIRST_RUN_BOOTSTRAP!"=="1" (
+  echo.
+  echo ============================================================
+  echo   First-run setup. This happens once on a fresh extract.
+  echo   Takes about 5 minutes total. Please keep this window open.
+  echo ============================================================
+  echo.
+)
+
+if not exist "node_modules" (
+  echo [1/3] Installing dependencies via !PM!...
+  echo       ^(this is the longest step — 3-5 minutes^)
+  echo.
+  REM --ignore-scripts skirts pnpm 11+ build-script gate; we rebuild
+  REM native modules explicitly below. --prefer-offline reuses the
+  REM pnpm-store cache on re-runs (10x faster).
+  set "NPM_CONFIG_IGNORED_BUILDS_CHECK=false"
+  set "NPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS=true"
+  if "!PM!"=="pnpm" (
+    call !PM! install --ignore-scripts --prefer-offline
+  ) else (
+    call !PM! install --no-audit --no-fund --ignore-scripts
+  )
+  if errorlevel 1 (
+    echo.
+    echo Dependency install failed. Check the messages above.
+    echo If it's a network error, check your connection and re-run.
+    pause
+    exit /b 1
+  )
+  REM Rebuild native modules (better-sqlite3 etc.)
+  call !PM! rebuild >nul 2>&1
+)
+
+if not exist ".next\BUILD_ID" (
+  echo.
+  echo [2/3] Building production bundle...
+  echo       ^(1-2 minutes; makes the daily server boot in ~3s instead of ~30s^)
+  echo.
+  call !PM! run build
+  if errorlevel 1 (
+    echo.
+    echo Production build failed. Will fall back to dev mode (slower but works).
+    REM Don't exit — dev mode still works, just slower
+  )
+)
+
+REM Playwright chromium — needed for rank-checking + SERP scan only.
+REM Don't block on this. If it fails, just warn — main app still runs.
+if not exist "node_modules\playwright\node_modules\@playwright\browser-chromium" (
+  if not exist "node_modules\.pnpm\@playwright+test*\node_modules\@playwright\test" (
+    if "!FIRST_RUN_BOOTSTRAP!"=="1" (
+      echo.
+      echo [3/3] Downloading Playwright Chromium ^(~170 MB, 1-2 min^)...
+      echo       ^(used by rank tracker + SERP scanner; skip-safe^)
+      echo.
+      call !PM! exec playwright install chromium 2>nul
+    )
+  )
+)
+
+if "!FIRST_RUN_BOOTSTRAP!"=="1" (
+  echo.
+  echo ============================================================
+  echo   First-run setup complete. Starting server...
+  echo ============================================================
+  echo.
+)
+
 REM ---- 3. Already running on this port? Distinguish OURS vs a SIBLING
 REM     install. /api/v1/health reports its installRoot; if it doesn't
 REM     match this install dir, someone else is on this port — pick a

@@ -329,7 +329,14 @@
       // of "Stopped".
       var startClickedAt = 0;
       var stopClickedAt  = 0;
-      var GRACE_MS = 60000; // 60s — enough for cold Next.js start
+      // First-run installs (no node_modules) need much longer — they
+      // download deps + Chromium + build. Detect at click time and
+      // scale the grace window accordingly.
+      function graceMs() {
+        var fresh = !fso.FolderExists(DIR + "\\node_modules") ||
+                    !fso.FileExists(DIR + "\\.next\\BUILD_ID");
+        return fresh ? 600000 : 60000; // 10 min vs 1 min
+      }
 
       function openApp() {
         if (!currentPort) return;
@@ -381,47 +388,88 @@
 
       function startApp() {
         document.getElementById("startBtn").disabled = true;
-        setChecking("Starting server… (up to 60s for first boot)");
+        var thisGrace = graceMs();
+        if (thisGrace > 60000) {
+          // First-run path — node_modules / .next missing. START.cmd
+          // will bootstrap (install + build). Show realistic timing.
+          setChecking("First-run setup (3-8 min — installing deps + building)…");
+        } else {
+          setChecking("Starting server… (up to 60s)");
+        }
         startClickedAt = (new Date()).getTime();
         if (!runCmd("START.cmd", "Couldn't start the server")) {
           startClickedAt = 0; // reset grace if the spawn itself failed
           setDown();
           return;
         }
-        // Watchdog: if 60s passes and the server STILL isn't up, the
-        // process probably crashed during boot. Surface the last lines
-        // of dev-server.err.log so the user can see WHY instead of
-        // staring at "Starting…" forever.
-        setTimeout(crashDiagnostics, GRACE_MS + 2000);
+        // Watchdog fires after the appropriate grace window.
+        setTimeout(crashDiagnostics, thisGrace + 2000);
       }
 
       function crashDiagnostics() {
         if (currentPort) return; // server came up; nothing to diagnose
         if (!startClickedAt) return; // start wasn't actually clicked
+
+        // Diagnose by state. First-run failure (no node_modules) is
+        // a totally different message from server-crash (.next stale).
+        var hasNodeModules = fso.FolderExists(DIR + "\\node_modules");
+        var hasBuild = fso.FileExists(DIR + "\\.next\\BUILD_ID");
+
+        if (!hasNodeModules) {
+          alert(
+            "First-run setup didn't complete.\n\n" +
+            "node_modules still isn't there. That usually means:\n" +
+            "  - Node.js isn't installed on this PC\n" +
+            "    → Install LTS: https://nodejs.org/ (or: winget install OpenJS.NodeJS.LTS)\n" +
+            "  - Your network blocked npm/pnpm registry access\n" +
+            "  - The cmd window closed before pnpm install finished\n\n" +
+            "Open File Explorer here:\n" +
+            DIR + "\n" +
+            "and double-click \"Start SEO Tool (Windows).hta\" again, keeping\n" +
+            "the black cmd window OPEN so you can see what happens.\n\n" +
+            "If you keep seeing this, run install.ps1 from PowerShell."
+          );
+          startClickedAt = 0;
+          setDown();
+          return;
+        }
+
+        // node_modules exists but server still didn't come up — read err log.
         var errLog = DIR + "\\dev-server.err.log";
         var tail = "";
         if (fso.FileExists(errLog)) {
           try {
-            var f = fso.OpenTextFile(errLog, 1, false);
-            var text = f.ReadAll();
-            f.Close();
-            // Last ~2000 chars usually contain the actual error
-            tail = text.length > 2000 ? "…\n" + text.substring(text.length - 2000) : text;
+            // GetFile().Size avoids the "Input past end of file" crash
+            // that ReadAll() throws on a 0-byte file.
+            var sz = fso.GetFile(errLog).Size;
+            if (sz === 0) {
+              tail = "(log is empty — server process probably failed before " +
+                     "writing any error. Common causes: pnpm not in PATH, " +
+                     "Node version too old, port already taken)";
+            } else {
+              var f = fso.OpenTextFile(errLog, 1, false);
+              var text = f.ReadAll();
+              f.Close();
+              tail = text.length > 2000 ? "…\n" + text.substring(text.length - 2000) : text;
+            }
           } catch (e) {
             tail = "(couldn't read dev-server.err.log: " + e.message + ")";
           }
+        } else {
+          tail = "(dev-server.err.log doesn't exist — the cmd never spawned a server)";
         }
-        var msg =
-          "The server started but crashed during boot.\n\n" +
-          "Most common cause: stale .next build that references modules " +
-          "no longer in node_modules. Fix by opening a terminal in:\n" +
-          DIR + "\n" +
-          "and running:\n" +
-          "  pnpm run build\n" +
-          "(takes ~2 min). Then click Start again.\n\n" +
+
+        var hint = hasBuild
+          ? "Server has all files but crashed at boot. Try Stop, then Start again."
+          : "Production build (.next) is missing. START.cmd should have built it " +
+            "automatically. If it didn't, run: pnpm run build";
+
+        alert(
+          "The server didn't come up.\n\n" +
+          hint + "\n\n" +
           "=== Last lines of dev-server.err.log ===\n" +
-          (tail || "(empty)");
-        alert(msg);
+          (tail || "(empty)")
+        );
         startClickedAt = 0;
         setDown();
       }
@@ -437,8 +485,11 @@
 
       // --- Polling loop ---
 
+      // Use the same scaled grace window the watchdog uses, so a
+      // first-run install isn't prematurely flipped to "Stopped"
+      // mid-pnpm-install.
       function inGrace(clickedAt) {
-        return clickedAt > 0 && ((new Date()).getTime() - clickedAt) < GRACE_MS;
+        return clickedAt > 0 && ((new Date()).getTime() - clickedAt) < graceMs();
       }
 
       function tick() {
