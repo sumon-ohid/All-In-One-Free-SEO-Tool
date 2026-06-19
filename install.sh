@@ -519,11 +519,16 @@ fi
 # explain, same one-click experience.
 if [ -d "$DESKTOP" ] && [ "$HAS_DOCKER" != "1" ]; then
   chmod +x "$DIR/bin/START.sh" "$DIR/bin/STOP.sh" "$DIR/bin/seo.sh" 2>/dev/null || true
+  # Root-level wrappers need the executable bit too (the repo commits
+  # them but ZIP installs strip +x).
+  chmod +x "$DIR/Start SEO Tool.command" "$DIR/Stop SEO Tool.command" 2>/dev/null || true
 
-  # Sweep up legacy launcher files from previous installs so the user
-  # ends with exactly ONE launcher on their Desktop (SEO Tool.html)
-  # instead of 3-4 confusing files. The HTML control panel replaces
-  # the function of all of these.
+  # Sweep up legacy desktop launcher files from earlier installs. All
+  # three launchers (Start SEO Tool.command, Stop SEO Tool.command,
+  # SEO Tool.html) now ship at the INSTALL ROOT — committed to the
+  # repo, no install-time rendering required, no desktop clutter.
+  # Users can favorite the install folder or drag the launchers to
+  # the Dock / Files sidebar for the same one-click feel.
   for legacy in \
     "Start-SEO-Tool.desktop" \
     "Stop-SEO-Tool.desktop" \
@@ -531,38 +536,11 @@ if [ -d "$DESKTOP" ] && [ "$HAS_DOCKER" != "1" ]; then
     "Start SEO Tool.command" \
     "Stop SEO Tool.command" \
     "SEO Tool.command" \
+    "SEO Tool.html" \
     "SEO-Tool-Welcome.txt"; do
     [ -f "$DESKTOP/$legacy" ] && rm -f "$DESKTOP/$legacy"
   done
 
-  # Drop the HTML control panel on the desktop. Double-click opens it
-  # in the user's default browser; it auto-detects whether the server
-  # is running and either opens the app or links to START. Survives
-  # port changes (template is re-written every install with current port).
-  LAUNCHER_TPL="$DIR/templates/desktop-launcher.html"
-  if [ -f "$LAUNCHER_TPL" ]; then
-    LAUNCHER_OUT="$DESKTOP/SEO Tool.html"
-    # OS-aware paths for the start/stop links
-    if [ "$(uname -s)" = "Darwin" ]; then
-      START_LINK="file://$DIR/bin/START.sh"
-      STOP_LINK="file://$DIR/bin/STOP.sh"
-    elif [ "$(uname -s)" = "Linux" ]; then
-      START_LINK="file://$DIR/bin/START.sh"
-      STOP_LINK="file://$DIR/bin/STOP.sh"
-    else
-      START_LINK="file:///$(printf '%s' "$DIR" | sed 's| |%20|g')/bin/START.sh"
-      STOP_LINK="file:///$(printf '%s' "$DIR" | sed 's| |%20|g')/bin/STOP.sh"
-    fi
-    # sed-substitute the four placeholders. Use a delimiter unlikely to
-    # appear in any of the values (|) to dodge slash-escaping pain.
-    sed -e "s|{{PORT}}|$PORT|g" \
-        -e "s|{{DIR}}|$DIR|g" \
-        -e "s|{{START_CMD}}|$START_LINK|g" \
-        -e "s|{{STOP_CMD}}|$STOP_LINK|g" \
-        "$LAUNCHER_TPL" > "$LAUNCHER_OUT" \
-      && say "Created desktop launcher: $LAUNCHER_OUT" \
-      || warn "Could not write desktop HTML launcher"
-  fi
 fi
 
 # ---- 5b. Auto-start at login (opt-in via SEO_AUTOSTART=1) ------------------

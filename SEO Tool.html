@@ -1,0 +1,346 @@
+<!doctype html>
+<!--
+  SEO Tool — control panel (lives at the install root).
+
+  Sits next to "Start SEO Tool.cmd" and "Stop SEO Tool.cmd". Either
+  file can be double-clicked: the .cmd files do the real work
+  (browsers can't execute local processes from a button click for
+  security reasons); this HTML is a friendly visual control with
+  live status and big colored buttons that hand off to those .cmds
+  via file:// links.
+
+  Port discovery: tries a list of common dev ports (3000, 3001,
+  3010, 5173, 8080) PLUS the deterministic-ephemeral range starts
+  AND honors a #port=NNNN URL hash override. The first endpoint
+  that returns our /api/v1/health signature wins.
+
+  No template substitution needed — this file is committed to the
+  repo and works for any install. Start SEO Tool.cmd / .command live
+  alongside; their relative file:// paths are stable.
+
+  Single-file: no external CSS, no fonts, no images. Works offline.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SEO Tool — Control Panel</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%237c3aed' d='M12 2L4 6v6c0 5 4 9 8 10 4-1 8-5 8-10V6l-8-4zm0 6l2 4h-4l2-4z'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        color-scheme: dark light;
+        --bg: #0a0a14;
+        --card: #14141f;
+        --border: #2a2a3a;
+        --text: #e6e6f0;
+        --muted: #8a8aa0;
+        --primary: #8b5cf6;
+        --primary-hover: #a78bfa;
+        --success: #10b981;
+        --success-hover: #34d399;
+        --danger: #f43f5e;
+        --danger-hover: #fb7185;
+        --warn: #f59e0b;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f8f9fc;
+          --card: #ffffff;
+          --border: #e4e6f0;
+          --text: #1a1a2e;
+          --muted: #5c5c75;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background:
+          radial-gradient(ellipse at top left, rgba(139,92,246,0.15), transparent 60%),
+          radial-gradient(ellipse at bottom right, rgba(16,185,129,0.1), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        min-height: 100vh;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 36px;
+        max-width: 460px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      }
+      .header { text-align: center; margin-bottom: 28px; }
+      .logo {
+        width: 52px; height: 52px; margin: 0 auto 14px;
+        background: linear-gradient(135deg, var(--primary), var(--success));
+        border-radius: 13px;
+        display: grid; place-items: center;
+        color: white; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+      }
+      h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+      .subtitle { color: var(--muted); font-size: 13px; margin: 0; }
+      .status {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 7px 13px; border-radius: 999px;
+        font-size: 12px; font-weight: 600;
+        margin: 16px 0 4px;
+        background: rgba(245,158,11,0.12); color: var(--warn);
+        border: 1px solid rgba(245,158,11,0.3);
+      }
+      .status.up {
+        background: rgba(16,185,129,0.12); color: var(--success);
+        border-color: rgba(16,185,129,0.3);
+      }
+      .status.down {
+        background: rgba(244,63,94,0.12); color: var(--danger);
+        border-color: rgba(244,63,94,0.3);
+      }
+      .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: currentColor;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .actions { display: grid; gap: 10px; margin-top: 4px; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 10px; width: 100%;
+        padding: 14px 20px;
+        border: none; border-radius: 10px;
+        font-size: 15px; font-weight: 600;
+        cursor: pointer; text-decoration: none;
+        transition: all 0.15s;
+        font-family: inherit;
+        color: white;
+      }
+      .btn[aria-disabled="true"] {
+        opacity: 0.4; cursor: not-allowed; pointer-events: none;
+      }
+      .btn-open { background: var(--primary); }
+      .btn-open:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(139,92,246,0.3);
+      }
+      .btn-start { background: var(--success); }
+      .btn-start:hover {
+        background: var(--success-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(16,185,129,0.3);
+      }
+      .btn-stop { background: var(--danger); }
+      .btn-stop:hover {
+        background: var(--danger-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(244,63,94,0.3);
+      }
+      .icon { font-size: 16px; line-height: 1; }
+      .hint {
+        margin-top: 14px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.5;
+        text-align: center;
+      }
+      .footer {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .footer a {
+        color: var(--primary-hover);
+        text-decoration: none;
+      }
+      .footer a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="header">
+        <div class="logo">SEO</div>
+        <h1>SEO Tool</h1>
+        <p class="subtitle">
+          All-in-one free SEO platform.<br />
+          Open · Start · Stop — pick one.
+        </p>
+        <div id="status" class="status">
+          <span class="dot"></span>
+          <span id="statusText">Checking ports…</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <a id="openBtn" class="btn btn-open" href="#" aria-disabled="true">
+          <span class="icon">→</span> Open SEO Tool
+        </a>
+        <!--
+          IMPORTANT: these file:// links resolve RELATIVE to where this
+          HTML lives. Since this file ships at the install root next to
+          "Start SEO Tool.cmd" and "Stop SEO Tool.cmd", the relative
+          links just work — no install-time substitution needed.
+        -->
+        <a id="startBtn" class="btn btn-start" href="Start%20SEO%20Tool.cmd">
+          <span class="icon">▶</span> Start the server
+        </a>
+        <a id="stopBtn" class="btn btn-stop" href="Stop%20SEO%20Tool.cmd" aria-disabled="true">
+          <span class="icon">■</span> Stop the server
+        </a>
+      </div>
+
+      <p class="hint">
+        On Windows, Start / Stop run the .cmd file in your install
+        folder (your browser may show a one-time security prompt).
+        On macOS use <code>Start SEO Tool.command</code> instead.
+      </p>
+
+      <div class="footer">
+        <a href="https://github.com/IamRamgarhia/SEO-Tool" target="_blank">GitHub</a>
+        &middot;
+        <a href="https://github.com/IamRamgarhia/SEO-Tool/issues" target="_blank">Report an issue</a>
+      </div>
+    </main>
+
+    <script>
+      // Port discovery. The launcher doesn't know the install's port
+      // up-front (the user could have any port from the IANA ephemeral
+      // range hashed from their install path). We probe a short list:
+      //
+      //   1. URL hash override:  SEO Tool.html#port=63140
+      //   2. Common dev defaults (3000, 3001, 8080, 5173, 5000, 4000)
+      //   3. The first ~30 ports from the ephemeral range (49152+)
+      //      — covered LAZILY so we don't take forever
+      //
+      // The first endpoint that returns a /api/v1/health response with
+      // our service signature wins.
+
+      const HASH_PORT = (location.hash.match(/port=(\d+)/) || [])[1];
+      const COMMON = ["3000","3001","3002","3010","5000","5173","4000","8080","8081"];
+      const EPHEMERAL = Array.from({length: 30}, (_, i) => String(49152 + i));
+      const PORTS = HASH_PORT
+        ? [HASH_PORT, ...COMMON, ...EPHEMERAL]
+        : [...COMMON, ...EPHEMERAL];
+
+      const $status = document.getElementById("status");
+      const $statusText = document.getElementById("statusText");
+      const $openBtn = document.getElementById("openBtn");
+      const $startBtn = document.getElementById("startBtn");
+      const $stopBtn = document.getElementById("stopBtn");
+
+      let currentPort = null;
+      let pollMs = 2000;
+      let wasDown = false;
+
+      async function probePort(port) {
+        try {
+          const ctl = new AbortController();
+          const tid = setTimeout(() => ctl.abort(), 800);
+          const res = await fetch(`http://localhost:${port}/api/v1/health`, {
+            cache: "no-store",
+            signal: ctl.signal,
+          });
+          clearTimeout(tid);
+          if (!res.ok) return false;
+          const body = await res.json().catch(() => null);
+          if (!body || body.service !== "seo-tool") return false;
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function findServer() {
+        // Probe in parallel batches of 4 so the page becomes responsive
+        // quickly even when nothing's running.
+        const BATCH = 4;
+        for (let i = 0; i < PORTS.length; i += BATCH) {
+          const batch = PORTS.slice(i, i + BATCH);
+          const results = await Promise.all(batch.map((p) => probePort(p)));
+          for (let j = 0; j < batch.length; j++) {
+            if (results[j]) return batch[j];
+          }
+        }
+        return null;
+      }
+
+      function setUp(port) {
+        currentPort = port;
+        const url = `http://localhost:${port}`;
+        $status.className = "status up";
+        $statusText.textContent = `Running on port ${port}`;
+        $openBtn.href = url;
+        $openBtn.setAttribute("aria-disabled", "false");
+        $startBtn.setAttribute("aria-disabled", "true");
+        $stopBtn.setAttribute("aria-disabled", "false");
+        pollMs = 5000;
+        if (wasDown) {
+          wasDown = false;
+          setTimeout(() => {
+            window.location.href = url;
+          }, 600);
+        }
+      }
+
+      function setDown() {
+        currentPort = null;
+        $status.className = "status down";
+        $statusText.textContent = "Stopped — click Start";
+        $openBtn.setAttribute("aria-disabled", "true");
+        $openBtn.removeAttribute("href");
+        $startBtn.setAttribute("aria-disabled", "false");
+        $stopBtn.setAttribute("aria-disabled", "true");
+        pollMs = 2000;
+        wasDown = true;
+      }
+
+      $openBtn.addEventListener("click", (e) => {
+        if ($openBtn.getAttribute("aria-disabled") === "true") {
+          e.preventDefault();
+          return;
+        }
+        if (currentPort) {
+          e.preventDefault();
+          window.location.href = `http://localhost:${currentPort}`;
+        }
+      });
+
+      async function tick() {
+        // If we know the port, just re-probe that one (fast).
+        if (currentPort) {
+          const ok = await probePort(currentPort);
+          if (ok) {
+            setUp(currentPort);
+          } else {
+            setDown();
+          }
+          return;
+        }
+        // Otherwise scan for any responding port.
+        $statusText.textContent = "Scanning for running server…";
+        const found = await findServer();
+        if (found) {
+          setUp(found);
+        } else {
+          setDown();
+        }
+      }
+
+      tick();
+      setInterval(tick, pollMs);
+    </script>
+  </body>
+</html>
