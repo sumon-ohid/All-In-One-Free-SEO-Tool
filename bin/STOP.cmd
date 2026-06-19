@@ -21,6 +21,8 @@ cd /d "%~dp0\.."
 set "STOPPED=0"
 
 REM ---- 1. Saved PID — try graceful first, then force.
+REM NOTE: labels (:foo) cannot live inside parenthesised IF blocks in
+REM cmd.exe — they're a parse error. Use a sentinel variable instead.
 if exist ".dev-server.pid" (
   set /p OUR_PID=<.dev-server.pid
   if defined OUR_PID (
@@ -30,24 +32,29 @@ if exist ".dev-server.pid" (
     taskkill /PID !OUR_PID! /T >nul 2>&1
 
     REM Wait up to 5s for the process to exit on its own
+    set "GRACEFUL=0"
     for /L %%i in (1,1,5) do (
-      tasklist /FI "PID eq !OUR_PID!" 2>nul | find "!OUR_PID!" >nul
-      if errorlevel 1 (
-        echo Stopped SEO Tool process !OUR_PID! gracefully.
-        set "STOPPED=1"
-        goto :pid_done
+      if "!GRACEFUL!"=="0" (
+        tasklist /FI "PID eq !OUR_PID!" 2>nul | find "!OUR_PID!" >nul
+        if errorlevel 1 (
+          echo Stopped SEO Tool process !OUR_PID! gracefully.
+          set "STOPPED=1"
+          set "GRACEFUL=1"
+        ) else (
+          timeout /t 1 /nobreak >nul
+        )
       )
-      timeout /t 1 /nobreak >nul
     )
 
     REM Still alive — force-kill
-    taskkill /F /PID !OUR_PID! /T >nul 2>&1
-    if not errorlevel 1 (
-      echo Stopped SEO Tool process !OUR_PID! (forced).
-      set "STOPPED=1"
+    if "!GRACEFUL!"=="0" (
+      taskkill /F /PID !OUR_PID! /T >nul 2>&1
+      if not errorlevel 1 (
+        echo Stopped SEO Tool process !OUR_PID! ^(forced^).
+        set "STOPPED=1"
+      )
     )
   )
-  :pid_done
   del /F ".dev-server.pid" >nul 2>&1
 )
 

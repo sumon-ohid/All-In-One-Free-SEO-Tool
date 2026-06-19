@@ -133,6 +133,46 @@ echo (first launch can take 30-90 seconds while it compiles)
 REM ---- 6. Wait for /api/v1/health to confirm the app is actually up.
 powershell -NoProfile -Command "for ($i=0; $i -lt 60; $i++) { try { (Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT%/api/v1/health -TimeoutSec 1).StatusCode | Out-Null; break } catch { Start-Sleep -Seconds 1 } }"
 
+REM ---- 6b. Auto-recover from a stale .next build.
+REM     When .next references modules by content-hash (e.g.
+REM     "better-sqlite3-4f3f783ea63d70cf") and node_modules has been
+REM     reinstalled since the last build, the server crashes at boot
+REM     with "Cannot find module ...-<hash>". Detect that pattern in
+REM     the error log, rebuild .next once, and retry. Without this
+REM     auto-fix, the user sees the diagnostic alert from the HTA
+REM     and has to run pnpm run build manually.
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT%/api/v1/health -TimeoutSec 2; exit ($r.StatusCode -eq 200 -as [int] - 1) } catch { exit 1 }"
+if errorlevel 1 (
+  set "STALE_BUILD=0"
+  if exist "dev-server.err.log" (
+    findstr /C:"Cannot find module" dev-server.err.log >nul 2>&1
+    if not errorlevel 1 (
+      findstr /C:"-server\.js" dev-server.err.log >nul 2>&1
+      if not errorlevel 1 set "STALE_BUILD=1"
+    )
+  )
+  if "!STALE_BUILD!"=="1" (
+    echo.
+    echo Detected stale .next build crash — rebuilding automatically.
+    echo This takes ~2 minutes the first time. Please wait...
+    echo.
+    REM Kill the crashed child so it doesn't hold .next files
+    if exist ".dev-server.pid" (
+      set /p OLD_PID=<.dev-server.pid
+      if defined OLD_PID taskkill /F /PID !OLD_PID! /T >nul 2>&1
+      del /F ".dev-server.pid" >nul 2>&1
+    )
+    call %PM% run build
+    if not errorlevel 1 (
+      echo Rebuild done. Restarting server...
+      type nul > dev-server.log
+      type nul > dev-server.err.log
+      powershell -NoProfile -Command "$p = Start-Process -FilePath '.dev-server.cmd' -WindowStyle Hidden -WorkingDirectory \"%CD%\" -RedirectStandardOutput 'dev-server.log' -RedirectStandardError 'dev-server.err.log' -PassThru; if ($p) { $p.Id ^| Out-File '.dev-server.pid' -Encoding ascii -Force }"
+      powershell -NoProfile -Command "for ($i=0; $i -lt 60; $i++) { try { (Invoke-WebRequest -UseBasicParsing -Uri http://localhost:%PORT%/api/v1/health -TimeoutSec 1).StatusCode | Out-Null; break } catch { Start-Sleep -Seconds 1 } }"
+    )
+  )
+)
+
 REM ---- 7. Open in app-window mode if Chrome/Edge/Brave is available.
 REM     `--app=URL` strips the tabs + URL bar, giving the user a
 REM     PWA-feel dedicated window. Falls back to default browser if
