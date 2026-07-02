@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   buildAuthUrl,
   getGoogleClientCredentials,
+  resolveRedirectUri,
 } from "@/lib/google-oauth";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +17,11 @@ export async function GET(req: NextRequest) {
       ),
     );
   }
-  const redirectUri = new URL(
-    "/api/google/callback",
-    req.nextUrl.origin,
-  ).toString();
+  // MUST use the same URI-derivation logic as settings/google/page.tsx.
+  // Otherwise the URI we show the user (to register in Google Cloud
+  // Console) diverges from the URI Google actually receives, and
+  // Google rejects with "Error 400: invalid_request".
+  const redirectUri = resolveRedirectUri(req);
 
   const popup = req.nextUrl.searchParams.get("popup") === "1";
   const clientId = req.nextUrl.searchParams.get("clientId");

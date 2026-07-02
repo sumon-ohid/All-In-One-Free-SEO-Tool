@@ -13,7 +13,10 @@ import {
 import { headers } from "next/headers";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
-import { getGoogleConnectionStatus } from "@/lib/google-oauth";
+import {
+  getGoogleConnectionStatus,
+  resolveRedirectUriFromHeaders,
+} from "@/lib/google-oauth";
 import { getSetting } from "@/lib/settings-store";
 import { GoogleCredentialsForm } from "./credentials-form";
 import {
@@ -33,13 +36,13 @@ export default async function GoogleSettingsPage({
   const clientId = await getSetting<string>("google.client_id");
   const clientSecret = await getSetting<string>("google.client_secret");
 
-  // Best-effort guess of the redirect URI for the user — we can't know the
-  // browser-side URL from a server component, but the host header gets us close.
+  // The URI shown here MUST equal what the auth-init route + callback
+  // route send to Google. Shared helper enforces that. Divergence
+  // was the root cause of "Error 400: invalid_request" for users who
+  // registered one URI in Google Cloud Console and had the app send
+  // Google a different one.
   const hdrs = await headers();
-  const host =
-    hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "localhost:3000";
-  const proto = hdrs.get("x-forwarded-proto") ?? "http";
-  const redirectUri = `${proto}://${host}/api/google/callback`;
+  const redirectUri = resolveRedirectUriFromHeaders(hdrs);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

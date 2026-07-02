@@ -80,6 +80,52 @@ export async function getGoogleClientCredentials(): Promise<{
 }
 
 /**
+ * Compute the exact redirect_uri to hand to Google. MUST be identical
+ * across (a) what we display to the user on /settings/google so they
+ * register it in Google Cloud Console, (b) what the auth-init route
+ * puts in the `redirect_uri` query param, and (c) what the callback
+ * route sends to the token endpoint. Any drift causes Google to
+ * reject the flow with "Error 400: invalid_request".
+ *
+ * Prefers `x-forwarded-*` headers so this works behind a reverse
+ * proxy (nginx, Caddy, Cloudflare, Docker port mapping). Falls back
+ * to the raw host / protocol from `NextRequest.nextUrl`.
+ */
+export function resolveRedirectUri(req: {
+  headers: { get(name: string): string | null };
+  nextUrl: { hostname: string; port: string; protocol: string };
+}): string {
+  const fwdHost = req.headers.get("x-forwarded-host");
+  const rawHost = req.headers.get("host");
+  const host =
+    fwdHost ??
+    rawHost ??
+    (req.nextUrl.port
+      ? `${req.nextUrl.hostname}:${req.nextUrl.port}`
+      : req.nextUrl.hostname);
+  const proto =
+    req.headers.get("x-forwarded-proto") ??
+    req.nextUrl.protocol.replace(":", "");
+  return `${proto}://${host}/api/google/callback`;
+}
+
+/**
+ * Same logic as `resolveRedirectUri` but for server components that
+ * only have access to Next.js's `headers()` API (no NextRequest).
+ * Used by /settings/google to display the URI a user must register.
+ */
+export function resolveRedirectUriFromHeaders(
+  hdrs: { get(name: string): string | null },
+): string {
+  const host =
+    hdrs.get("x-forwarded-host") ??
+    hdrs.get("host") ??
+    "localhost:3000";
+  const proto = hdrs.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}/api/google/callback`;
+}
+
+/**
  * Build the Google authorization URL. We always force `consent` so the
  * refresh_token is returned (Google only sends it on first-consent or with
  * `prompt=consent`).
@@ -196,18 +242,20 @@ export async function getAccessToken(
       if (accessTokenPlain && expiresAt - 60_000 > Date.now()) {
         return accessTokenPlain;
       }
-      // Refresh per-client token using workspace OAuth client credentials
-      const wsClientId = await getSetting<string>("google.client_id");
-      const wsClientSecret = await getSetting<string>("google.client_secret");
-      if (!wsClientId || !wsClientSecret) {
+      // Refresh per-client token using workspace OAuth client credentials.
+      // MUST call the same helper the auth route uses — otherwise env-var
+      // credentials (GOOGLE_OAUTH_CLIENT_ID / _SECRET) don't count and
+      // the refresh path throws even though the sign-in path worked.
+      const wsCreds = await getGoogleClientCredentials();
+      if (!wsCreds) {
         throw new Error(
           "Workspace OAuth client not configured — set Google client_id / client_secret first.",
         );
       }
       const refreshed = await refreshAccessToken({
         refreshToken: refreshTokenPlain,
-        clientId: wsClientId,
-        clientSecret: wsClientSecret,
+        clientId: wsCreds.clientId,
+        clientSecret: wsCreds.clientSecret,
       });
       const newExpiresAt = Date.now() + refreshed.expires_in * 1000;
       await db

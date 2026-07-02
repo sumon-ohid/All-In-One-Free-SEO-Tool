@@ -257,6 +257,11 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
       });
     } else if (active === "ollama") {
       const url = await getOllamaUrl();
+      // Guard against a null Ollama URL — otherwise callOllama would
+      // fetch `null/api/chat` and throw silently inside the outer
+      // catch, giving the user a mysterious null AI response with no
+      // hint about what to configure.
+      if (!url) return null;
       model = pickedModel;
       text = await callOllama({ url, model, ...packed, max, temperature, timeoutMs });
     } else if (active === "mistral") {

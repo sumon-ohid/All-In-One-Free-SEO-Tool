@@ -4,6 +4,7 @@ import {
   exchangeCodeForTokens,
   fetchGoogleUserEmail,
   getGoogleClientCredentials,
+  resolveRedirectUri,
 } from "@/lib/google-oauth";
 import { setSetting } from "@/lib/settings-store";
 import { encrypt } from "@/lib/crypto";
@@ -60,10 +61,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(settingsUrl);
   }
 
-  const redirectUri = new URL(
-    "/api/google/callback",
-    req.nextUrl.origin,
-  ).toString();
+  // MUST match the URI sent in the auth-init route AND shown to the
+  // user on /settings/google. Uses x-forwarded-* headers when present
+  // so behind-proxy installs work.
+  const redirectUri = resolveRedirectUri(req);
 
   let tokens;
   try {
