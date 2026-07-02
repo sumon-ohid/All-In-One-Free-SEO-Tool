@@ -70,6 +70,15 @@ dev-server.log
 dev-server.err.log
 .dev-server.pid
 .dev-server.cmd
+.install-progress
+# Junk files that have accidentally slipped in via bash heredoc /
+# commit-message parsing in past sessions. Keeping them explicitly
+# ignored so re-occurrences never get staged.
+commit-msg.txt
+/dev
+/production
+/3000)
+/hard)
 
 # Logs in general
 *.log

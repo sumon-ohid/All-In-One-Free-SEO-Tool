@@ -92,11 +92,21 @@ export default async function PerClientAIVisibilityPage({
 
       <PageHeader
         title={`AI visibility · ${client.name}`}
-        description="Track whether AI assistants cite this client's domain when answering tracked queries."
+        description="Track whether AI assistants cite this client's domain when answering tracked queries. Sentiment column shows the tone AI providers use when they DO mention the brand."
         icon={Sparkles}
         accent="rose"
         actions={
-          configured.length > 0 && tracked.length > 0 ? <CheckAllButton /> : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {configured.length > 0 && tracked.length > 0 && <CheckAllButton />}
+            {checks.length >= 3 && (
+              <a
+                href={`/tools/geo-swot/c/${client.id}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 text-xs font-medium text-rose-300 hover:bg-rose-500/20"
+              >
+                Generate GEO SWOT →
+              </a>
+            )}
+          </div>
         }
         meta={
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -130,6 +140,12 @@ export default async function PerClientAIVisibilityPage({
               <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-3 text-left font-medium">Query</th>
                 <th className="px-3 py-3 text-left font-medium">Mentions</th>
+                <th
+                  className="px-3 py-3 text-left font-medium"
+                  title="Average sentiment of the mentions across AI providers. Positive = brand described favourably; Negative = described unfavourably; Mixed = both."
+                >
+                  Sentiment
+                </th>
                 <th className="px-3 py-3 text-left font-medium">Latest checks</th>
                 <th className="px-3 py-3 text-right font-medium">Actions</th>
               </tr>
@@ -144,6 +160,37 @@ export default async function PerClientAIVisibilityPage({
                 }
                 const latest = Array.from(latestByProvider.values());
                 const mentions = latest.filter((r) => r.mentionsDomain).length;
+                // Aggregate sentiment across the checks that DID mention
+                // the brand. Prefer the numeric score (-100..+100) when
+                // present, fall back to the enum tally otherwise.
+                const scored = latest.filter(
+                  (r) => r.mentionsDomain && typeof r.sentimentScore === "number",
+                );
+                let sentimentBadge: { label: string; tone: "emerald" | "rose" | "amber" | "muted"; score: number | null } = {
+                  label: "—",
+                  tone: "muted",
+                  score: null,
+                };
+                if (scored.length > 0) {
+                  const avg = scored.reduce((s, r) => s + (r.sentimentScore ?? 0), 0) / scored.length;
+                  sentimentBadge = {
+                    label:
+                      avg > 30 ? "Positive"
+                      : avg < -30 ? "Negative"
+                      : "Neutral",
+                    tone:
+                      avg > 30 ? "emerald"
+                      : avg < -30 ? "rose"
+                      : "amber",
+                    score: Math.round(avg),
+                  };
+                }
+                const sentimentToneClass: Record<string, string> = {
+                  emerald: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+                  rose: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+                  amber: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+                  muted: "bg-white/5 text-muted-foreground ring-white/10",
+                };
                 return (
                   <tr key={k.id} className="hover:bg-white/[0.03]">
                     <td className="px-5 py-3 font-medium">{k.query}</td>
@@ -159,6 +206,18 @@ export default async function PerClientAIVisibilityPage({
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${sentimentToneClass[sentimentBadge.tone]}`}
+                        title={
+                          sentimentBadge.score !== null
+                            ? `Avg score ${sentimentBadge.score} on -100..+100 across ${scored.length} mention${scored.length === 1 ? "" : "s"}`
+                            : "No mentions with sentiment yet"
+                        }
+                      >
+                        {sentimentBadge.label}
+                      </span>
                     </td>
                     <td className="px-3 py-3 text-xs">
                       {latest.length === 0 ? (

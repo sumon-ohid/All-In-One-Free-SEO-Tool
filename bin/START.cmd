@@ -72,7 +72,12 @@ if "!FIRST_RUN_BOOTSTRAP!"=="1" (
   echo.
 )
 
+REM Progress-file protocol: each step writes a single line "step|label"
+REM to .install-progress before running. The HTA polls this file every
+REM 2s to show the user which step is executing. Cleared at the end of
+REM bootstrap so a subsequent normal start doesn't show stale progress.
 if not exist "node_modules" (
+  ^> ".install-progress" echo 1^|Installing dependencies ^(3-5 min^)
   echo [1/3] Installing dependencies via !PM!...
   echo       ^(this is the longest step — 3-5 minutes^)
   echo.
@@ -87,6 +92,7 @@ if not exist "node_modules" (
     call !PM! install --no-audit --no-fund --ignore-scripts
   )
   if errorlevel 1 (
+    ^> ".install-progress" echo 0^|Install failed
     echo.
     echo Dependency install failed. Check the messages above.
     echo If it's a network error, check your connection and re-run.
@@ -98,6 +104,7 @@ if not exist "node_modules" (
 )
 
 if not exist ".next\BUILD_ID" (
+  ^> ".install-progress" echo 2^|Building production bundle ^(1-2 min^)
   echo.
   echo [2/3] Building production bundle...
   echo       ^(1-2 minutes; makes the daily server boot in ~3s instead of ~30s^)
@@ -115,6 +122,7 @@ REM Don't block on this. If it fails, just warn — main app still runs.
 if not exist "node_modules\playwright\node_modules\@playwright\browser-chromium" (
   if not exist "node_modules\.pnpm\@playwright+test*\node_modules\@playwright\test" (
     if "!FIRST_RUN_BOOTSTRAP!"=="1" (
+      ^> ".install-progress" echo 3^|Downloading Playwright Chromium ^(~170 MB^)
       echo.
       echo [3/3] Downloading Playwright Chromium ^(~170 MB, 1-2 min^)...
       echo       ^(used by rank tracker + SERP scanner; skip-safe^)
@@ -123,6 +131,10 @@ if not exist "node_modules\playwright\node_modules\@playwright\browser-chromium"
     )
   )
 )
+
+REM Clear progress file once bootstrap is done so the HTA reverts to
+REM its normal "Starting server" status text.
+if "!FIRST_RUN_BOOTSTRAP!"=="1" del /F ".install-progress" 2>nul
 
 if "!FIRST_RUN_BOOTSTRAP!"=="1" (
   echo.
