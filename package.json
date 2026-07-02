@@ -84,6 +84,7 @@
   "scripts": {
     "predev": "node scripts/migrate.cjs",
     "dev": "next dev",
+    "dev:watch": "node scripts/migrate-watch.cjs",
     "prebuild": "node scripts/migrate.cjs",
     "build": "next build",
     "start": "next start",

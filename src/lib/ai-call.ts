@@ -14,9 +14,7 @@ function logPreview(text: string): string {
   return text.slice(0, LOG_PROMPT_PREVIEW_CHARS) + "... (truncated)";
 }
 import { withAiPermit } from "./ai-semaphore";
-import { callGemini as sharedCallGemini } from "./providers/gemini";
-import { callAnthropic as sharedCallAnthropic } from "./providers/anthropic";
-import { callOpenAICompat as sharedCallOpenAICompat } from "./providers/openai-compat";
+import { dispatchProviderCall, defaultModelFor } from "./provider-dispatch";
 
 export type AiFeatureName =
   | "exec_summary"
@@ -167,23 +165,7 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   let text: string | null = null;
   let errorMsg: string | undefined;
 
-  // Per-provider default model when no override is given.
-  // Updated 2026-05 — Google deprecated -latest suffix; flash models renamed.
-  const defaultModel: Record<string, string> = {
-    gemini: "gemini-2.0-flash",
-    groq: "llama-3.3-70b-versatile",
-    anthropic: "claude-haiku-4-5-20251001",
-    openai: "gpt-4o-mini",
-    openrouter: "meta-llama/llama-3.3-70b-instruct:free",
-    perplexity: "sonar",
-    ollama: "llama3",
-    mistral: "mistral-large-latest",
-    deepseek: "deepseek-chat",
-    cerebras: "llama-3.3-70b",
-    together: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    github: "gpt-4o",
-  };
-  const pickedModel = opts.modelOverride?.trim() || defaultModel[active];
+  const pickedModel = opts.modelOverride?.trim() || defaultModelFor(active);
 
   // Acquire one of the global AI permits. Caps workspace-wide
   // concurrency so the daily-agent's batch generations don't burst
@@ -191,149 +173,25 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   // happens to fire at the same moment. Permits are auto-released
   // in finally even when the dispatch throws.
   await withAiPermit(async () => {
-  try {
-    if (active === "gemini") {
-      const k = await getApiKey("gemini");
-      if (!k) return null;
+    try {
+      // Single dispatch call — every provider (gemini, anthropic, openai,
+      // groq, openrouter, perplexity, ollama, mistral, deepseek, cerebras,
+      // together, github) is defined in provider-dispatch.ts. Adding a new
+      // provider means one registry entry, not a new branch here.
       model = pickedModel;
-      text = await callGemini({ apiKey: k, model, ...packed, max, temperature, timeoutMs });
-    } else if (active === "groq") {
-      const k = await getApiKey("groq");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.groq.com/openai/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
+      text = await dispatchProviderCall(active!, {
+        system,
+        user: safeUser,
+        model: pickedModel,
+        maxTokens: max,
         temperature,
         timeoutMs,
+        caller: "ai-call",
       });
-    } else if (active === "anthropic") {
-      const k = await getApiKey("anthropic");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callAnthropic({ apiKey: k, model, ...packed, max, temperature, timeoutMs });
-    } else if (active === "openai") {
-      const k = await getApiKey("openai");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.openai.com/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "openrouter") {
-      const k = await getApiKey("openrouter");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://openrouter.ai/api/v1/chat/completions",
-        apiKey: k,
-        model,
-        extraHeaders: { "x-title": "SEO Tool" },
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "perplexity") {
-      const k = await getApiKey("perplexity");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.perplexity.ai/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "ollama") {
-      const url = await getOllamaUrl();
-      // Guard against a null Ollama URL — otherwise callOllama would
-      // fetch `null/api/chat` and throw silently inside the outer
-      // catch, giving the user a mysterious null AI response with no
-      // hint about what to configure.
-      if (!url) return null;
-      model = pickedModel;
-      text = await callOllama({ url, model, ...packed, max, temperature, timeoutMs });
-    } else if (active === "mistral") {
-      const k = await getApiKey("mistral");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.mistral.ai/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "deepseek") {
-      const k = await getApiKey("deepseek");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.deepseek.com/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "cerebras") {
-      const k = await getApiKey("cerebras");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.cerebras.ai/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "together") {
-      const k = await getApiKey("together");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://api.together.xyz/v1/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
-    } else if (active === "github") {
-      const k = await getApiKey("github");
-      if (!k) return null;
-      model = pickedModel;
-      text = await callOpenAICompat({
-        endpoint: "https://models.inference.ai.azure.com/chat/completions",
-        apiKey: k,
-        model,
-        ...packed,
-        max,
-        temperature,
-        timeoutMs,
-      });
+    } catch (err) {
+      errorMsg = (err as Error).message;
+      text = null;
     }
-  } catch (err) {
-    errorMsg = (err as Error).message;
-    text = null;
-  }
   });
 
   // Log every call (success or failure) — async-fire, never block
@@ -352,90 +210,5 @@ export async function callAI(opts: AiCallOptions): Promise<string | null> {
   return text;
 }
 
-type CallArgs = AiCallOptions & {
-  apiKey?: string;
-  max: number;
-  temperature: number;
-  timeoutMs: number;
-  /** Provider-specific model name. */
-  model?: string;
-};
-
-async function callGemini(args: CallArgs): Promise<string | null> {
-  // Returns null on any failure to match the contract of every other
-  // provider's caller in this file. (Previously this threw, which made
-  // Gemini the odd one out — the dispatcher catches errors but null vs
-  // thrown affected downstream logging.)
-  return sharedCallGemini({
-    apiKey: args.apiKey ?? "",
-    model: args.model,
-    system: args.system,
-    messages: [{ role: "user", content: args.user }],
-    maxTokens: args.max,
-    temperature: args.temperature,
-    timeoutMs: args.timeoutMs,
-    caller: "ai-call",
-  });
-}
-
-async function callAnthropic(args: CallArgs): Promise<string | null> {
-  return sharedCallAnthropic({
-    apiKey: args.apiKey ?? "",
-    model: args.model,
-    system: args.system,
-    messages: [{ role: "user", content: args.user }],
-    maxTokens: args.max,
-    temperature: args.temperature,
-    timeoutMs: args.timeoutMs,
-    caller: "ai-call",
-  });
-}
-
-async function callOpenAICompat(
-  args: CallArgs & {
-    endpoint: string;
-    model: string;
-    extraHeaders?: Record<string, string>;
-  },
-): Promise<string | null> {
-  return sharedCallOpenAICompat({
-    endpoint: args.endpoint,
-    apiKey: args.apiKey ?? "",
-    model: args.model,
-    system: args.system,
-    messages: [{ role: "user", content: args.user }],
-    maxTokens: args.max,
-    temperature: args.temperature,
-    timeoutMs: args.timeoutMs,
-    extraHeaders: args.extraHeaders,
-    caller: "ai-call",
-  });
-}
-
-async function callOllama(args: CallArgs & { url: string }): Promise<string | null> {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), args.timeoutMs);
-  try {
-    const res = await fetch(`${args.url}/api/chat`, {
-      method: "POST",
-      signal: c.signal,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: args.model || "llama3.2",
-        stream: false,
-        options: { temperature: args.temperature, num_predict: args.max },
-        messages: [
-          { role: "system", content: args.system },
-          { role: "user", content: args.user },
-        ],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      message?: { content?: string };
-    };
-    return data.message?.content?.trim() ?? null;
-  } finally {
-    clearTimeout(t);
-  }
-}
+// Provider-specific callers moved to src/lib/provider-dispatch.ts.
+// Everything above this line goes through dispatchProviderCall().
