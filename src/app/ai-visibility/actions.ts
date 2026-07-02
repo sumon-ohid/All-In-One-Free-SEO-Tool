@@ -195,3 +195,18 @@ export async function deleteVisibilityCheck(id: number): Promise<void> {
   await db.delete(aiVisibilityChecks).where(eq(aiVisibilityChecks.id, id));
   revalidatePath("/ai-visibility");
 }
+
+/**
+ * Toggle browser-mode AI search scrapers (Google AI Mode + Microsoft
+ * Copilot). Off by default because each scrape adds ~15-20s per
+ * keyword per platform to a check-all run. Called from the inline
+ * toggle on the AI visibility page.
+ */
+export async function setBrowserScrapedAiEnabled(
+  enabled: boolean,
+): Promise<{ ok: true; enabled: boolean }> {
+  const { setSetting } = await import("@/lib/settings-store");
+  await setSetting("ai_visibility.browser_scraped_enabled", enabled);
+  revalidatePath("/ai-visibility");
+  return { ok: true, enabled };
+}

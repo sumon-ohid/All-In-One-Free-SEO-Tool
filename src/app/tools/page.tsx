@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Activity,
   Bot,
+  CalendarClock,
   Camera,
   Code2,
   Compass,
@@ -709,8 +710,24 @@ const tools = [
     icon: Sparkles,
     title: "AI Overview passage optimizer ⭐",
     description:
-      "AIs cite 134-167 word self-contained passages. We split your draft, score each chunk on length / self-containment / Q→A / specifics / citations, and AI-rewrite the weak ones.",
+      "AIs cite 134-167 word self-contained passages. Paste a draft OR analyze a live URL — we split it, score each chunk on length / self-containment / Q→A / specifics / citations, and AI-rewrite low scorers in one batch.",
     accent: "violet",
+  },
+  {
+    href: "/tools/ai-robots",
+    icon: Bot,
+    title: "AI-bot robots.txt audit ⭐",
+    description:
+      "Which AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.) can currently reach this site? Per-bot status + a copy-paste patch you can flip Allow/Disallow per line before pasting into robots.txt.",
+    accent: "violet",
+  },
+  {
+    href: "/tools/freshness",
+    icon: CalendarClock,
+    title: "Freshness audit ⭐",
+    description:
+      "AI-search systems skip undated or stale pages. Fetches every freshness signal (HTTP header, meta tags, JSON-LD dateModified, <time> elements, visible 'Last updated' text) and gives you a ready-to-paste patch.",
+    accent: "emerald",
   },
   {
     href: "/tools/reputation-abuse-risk",

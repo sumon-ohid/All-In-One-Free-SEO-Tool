@@ -8,10 +8,12 @@ import { clients, keywords, aiVisibilityChecks } from "@/db/schema";
 import { PageHeader } from "@/components/shell/page-header";
 import { ClientToolHeader } from "@/components/shell/client-tool-grid";
 import { configuredProviders, PROVIDER_CATALOG } from "@/lib/api-keys";
+import { getSetting } from "@/lib/settings-store";
 import {
   CheckAllButton,
   CheckOneButton,
 } from "@/app/ai-visibility/check-buttons";
+import { BrowserModeAiToggle } from "@/app/ai-visibility/browser-mode-toggle";
 
 const providerLabel: Record<string, string> = {
   openai: "ChatGPT",
@@ -77,6 +79,10 @@ export default async function PerClientAIVisibilityPage({
 
   const totalMentions = checks.filter((c) => c.mentionsDomain).length;
 
+  const browserScrapedEnabled =
+    (await getSetting<boolean>("ai_visibility.browser_scraped_enabled")) ??
+    false;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <ClientToolHeader
@@ -99,6 +105,9 @@ export default async function PerClientAIVisibilityPage({
         accent="rose"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {tracked.length > 0 && (
+              <BrowserModeAiToggle initial={browserScrapedEnabled} />
+            )}
             {configured.length > 0 && tracked.length > 0 && <CheckAllButton />}
             {checks.length >= 3 && (
               <a
