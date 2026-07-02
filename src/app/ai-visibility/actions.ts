@@ -13,6 +13,7 @@ import {
   type LlmProvider,
 } from "@/lib/llm-citation";
 import { configuredProviders } from "@/lib/api-keys";
+import { getSetting } from "@/lib/settings-store";
 import { logActivity } from "@/lib/activity";
 import { classifySentiment } from "@/lib/ai-sentiment";
 
@@ -48,11 +49,23 @@ export async function runAiCheck(keywordId: number): Promise<RunCheckResult> {
   }
 
   const { ids } = await configuredProviders();
-  if (ids.length === 0) {
+
+  // Opt-in browser-mode scrapers for Google AI Mode + Microsoft Copilot.
+  // These don't need an API key; they drive the existing headless browser
+  // pool. Off by default because each adds ~15-20s to a check-all run.
+  const browserScrapedEnabled = await getSetting<boolean>(
+    "ai_visibility.browser_scraped_enabled",
+  );
+  const providerIds: LlmProvider[] = [...(ids as LlmProvider[])];
+  if (browserScrapedEnabled) {
+    providerIds.push("google_ai_mode", "copilot");
+  }
+
+  if (providerIds.length === 0) {
     return {
       ok: false,
       error:
-        "No AI provider configured. Open Settings → AI provider keys and paste a free Gemini, Groq, or Perplexity key.",
+        "No AI provider configured. Open Settings → AI provider keys and paste a free Gemini, Groq, or Perplexity key — or enable browser-mode AI-search checks in Settings.",
     };
   }
 
@@ -61,11 +74,7 @@ export async function runAiCheck(keywordId: number): Promise<RunCheckResult> {
     .replace(/^www\./i, "")
     .split("/")[0];
 
-  const results = await checkAllProviders(
-    row.query,
-    domain,
-    ids as LlmProvider[],
-  );
+  const results = await checkAllProviders(row.query, domain, providerIds);
 
   // Classify sentiment for every response that actually mentioned the
   // brand. Done in parallel — each classification is a small extra

@@ -115,6 +115,13 @@ export type SettingKey =
   // a client / configuring an AI provider clears the fresh state
   // naturally). Once set, the dashboard never redirects to /welcome again.
   | "onboarding.dismissed_at"
+  // Opt-in browser-mode scrapers for AI search products that don't
+  // have public APIs (Google AI Mode via ?udm=50, Microsoft Copilot).
+  // Default OFF because these add ~15-20s per keyword per platform
+  // to an "AI visibility check all keywords" run — big impact on
+  // check-all latency. When ON, both providers get added to the
+  // check list alongside API-based providers.
+  | "ai_visibility.browser_scraped_enabled"
   // Daily auto-backup. Default ON. The user can disable from /settings/backup
   // if they prefer to manage backups externally (Restic / Borg / Time Machine).
   | "autobackup.enabled"

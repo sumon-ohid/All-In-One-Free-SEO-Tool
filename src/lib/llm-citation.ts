@@ -9,8 +9,18 @@ import { getApiKey, getOllamaUrl, type Provider } from "./api-keys";
 import { callGemini as sharedCallGemini } from "./providers/gemini";
 import { callAnthropic as sharedCallAnthropic } from "./providers/anthropic";
 import { callOpenAICompat as sharedCallOpenAICompat } from "./providers/openai-compat";
+import { scrapeGoogleAiMode, scrapeCopilot } from "./ai-search-scrapers";
 
-export type LlmProvider = Provider | "ollama";
+/**
+ * All the AI-search surfaces we can track. Split into two categories:
+ *   - API providers (Provider from ./api-keys, plus "ollama"): call
+ *     the vendor API with the user's key
+ *   - Browser-scraped surfaces ("google_ai_mode", "copilot"): no
+ *     public API — we drive a headless browser through the product's
+ *     web UI and extract the response
+ * Both flow through the same checkOneProvider() dispatch.
+ */
+export type LlmProvider = Provider | "ollama" | "google_ai_mode" | "copilot";
 
 export type CitationCheckResult = {
   provider: LlmProvider;
@@ -306,6 +316,25 @@ export async function checkOneProvider(
       const key = await getApiKey("groq");
       if (!key) error = "No Groq API key configured";
       else response = await callGroq(key, prompt);
+    } else if (provider === "google_ai_mode") {
+      // Browser-scraped — no API key needed. Uses the headless
+      // browser pool with proxy rotation. Slower than API providers
+      // (~15-20s vs 2-5s) but genuinely covers Google's own AI Mode.
+      const r = await scrapeGoogleAiMode(query);
+      if (r.ok) {
+        response = r.text;
+        nativeCitations = r.citations;
+      } else {
+        error = r.error ?? "Google AI Mode scrape failed";
+      }
+    } else if (provider === "copilot") {
+      const r = await scrapeCopilot(query);
+      if (r.ok) {
+        response = r.text;
+        nativeCitations = r.citations;
+      } else {
+        error = r.error ?? "Microsoft Copilot scrape failed";
+      }
     }
   } catch (err) {
     error = (err as Error).message;

@@ -21,6 +21,8 @@ const providerLabel: Record<string, string> = {
   openrouter: "OpenRouter",
   groq: "Groq",
   ollama: "Ollama",
+  google_ai_mode: "Google AI Mode",
+  copilot: "Microsoft Copilot",
 };
 
 export default async function PerClientAIVisibilityPage({

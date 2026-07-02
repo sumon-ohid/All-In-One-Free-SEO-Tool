@@ -223,6 +223,9 @@ export const aiVisibilityChecks = sqliteTable("ai_visibility_checks", {
       "cerebras",
       "together",
       "github",
+      // Browser-scraped AI-search surfaces (no API key required):
+      "google_ai_mode",
+      "copilot",
     ],
   }).notNull(),
   prompt: text("prompt").notNull(),
