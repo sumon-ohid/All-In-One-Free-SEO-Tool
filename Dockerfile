@@ -7,7 +7,7 @@ FROM mcr.microsoft.com/playwright:v1.56.0-noble AS deps
 WORKDIR /app
 
 # pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 
 COPY package.json pnpm-lock.yaml* .npmrc* ./
 # --ignore-scripts bypasses pnpm 11+'s build-script gate (we run them
